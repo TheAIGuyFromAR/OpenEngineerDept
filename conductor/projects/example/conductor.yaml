@@ -1,0 +1,11 @@
+project_id: "example"
+project_dir: "/path/to/repo"
+obsidian_vault: "/path/to/obsidian-vault"
+gateway_url: "http://localhost:9090"
+inference_url: "http://localhost:8080"
+max_retries: 3
+accept_threshold: 7.0
+max_working_memory_tokens: 8000
+layer0_path: "./constraints.md"
+training_data_dir: "./data/training"
+exemplar_library_dir: "./data/exemplars"
