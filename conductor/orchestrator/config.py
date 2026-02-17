@@ -21,6 +21,16 @@ class OrchestratorConfig(BaseModel):
     training_data_dir: str = "./data/training"
     exemplar_library_dir: str = "./data/exemplars"
 
+    # Vault sync: "local" (default), "git", or "syncthing"
+    vault_sync_mode: str = "local"
+    # Git sync options
+    vault_sync_git_remote: str = "origin"
+    vault_sync_git_branch: str = "main"
+    # Syncthing sync options
+    vault_sync_syncthing_api: str = "http://localhost:8384"
+    vault_sync_syncthing_api_key: str = ""
+    vault_sync_syncthing_folder_id: str = ""
+
     @classmethod
     def from_yaml(cls, path: str) -> OrchestratorConfig:
         """Load config from a YAML file."""

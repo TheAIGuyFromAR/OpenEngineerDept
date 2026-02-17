@@ -9,3 +9,14 @@ max_working_memory_tokens: 8000
 layer0_path: "./constraints.md"
 training_data_dir: "./data/training"
 exemplar_library_dir: "./data/exemplars"
+
+# Vault sync — how to keep vault folder in sync with your machine.
+# Options: "local" (vault is on this machine), "git" (obsidian-git), "syncthing"
+vault_sync_mode: "local"
+# vault_sync_mode: "git"
+# vault_sync_git_remote: "origin"
+# vault_sync_git_branch: "main"
+# vault_sync_mode: "syncthing"
+# vault_sync_syncthing_api: "http://localhost:8384"
+# vault_sync_syncthing_api_key: "your-api-key"
+# vault_sync_syncthing_folder_id: "obsidian-vault"

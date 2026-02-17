@@ -8,6 +8,10 @@ Watches:
 
 Also watches Layer 0 constraints file for changes,
 triggering prefix cache invalidation.
+
+Sync: The conductor doesn't need Obsidian running. It watches the vault
+folder on the local filesystem. A VaultSyncAdapter keeps the folder
+in sync with the user's machine via git, Syncthing, or nothing (local).
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ from typing import Callable, Awaitable
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
 from watchdog.observers import Observer
 
+from .vault_sync import VaultSyncAdapter, LocalSync
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +38,7 @@ class ObsidianWatcher:
         layer0_path: str | None = None,
         on_new_task: Callable[[str, str], Awaitable[None]] | None = None,
         on_constraints_changed: Callable[[], Awaitable[None]] | None = None,
+        sync_adapter: VaultSyncAdapter | None = None,
     ) -> None:
         self._vault = Path(vault_path)
         self._inbox = self._vault / "conductor" / "inbox"
@@ -41,6 +48,7 @@ class ObsidianWatcher:
 
         self._on_new_task = on_new_task
         self._on_constraints_changed = on_constraints_changed
+        self._sync = sync_adapter or LocalSync()
         self._observer: Observer | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -77,8 +85,8 @@ class ObsidianWatcher:
             self._observer.join()
             logger.info("Obsidian watcher stopped")
 
-    def write_completed(self, task_filename: str, result: str) -> Path:
-        """Move task to completed/ with result appended."""
+    async def write_completed(self, task_filename: str, result: str) -> Path:
+        """Move task to completed/ with result appended, then sync."""
         src = self._inbox / task_filename
         dst = self._completed / task_filename
 
@@ -90,10 +98,11 @@ class ObsidianWatcher:
         content += f"\n\n---\n## Result\n{result}\n"
         dst.write_text(content, encoding="utf-8")
         logger.info("Completed: %s", task_filename)
+        await self._sync.sync_after_write()
         return dst
 
-    def write_failed(self, task_filename: str, error: str) -> Path:
-        """Move task to failed/ with error appended."""
+    async def write_failed(self, task_filename: str, error: str) -> Path:
+        """Move task to failed/ with error appended, then sync."""
         src = self._inbox / task_filename
         dst = self._failed / task_filename
 
@@ -105,15 +114,21 @@ class ObsidianWatcher:
         content += f"\n\n---\n## Error\n{error}\n"
         dst.write_text(content, encoding="utf-8")
         logger.info("Failed: %s", task_filename)
+        await self._sync.sync_after_write()
         return dst
 
-    def list_pending(self) -> list[tuple[str, str]]:
-        """List pending tasks in inbox. Returns (filename, content) pairs."""
+    async def list_pending(self) -> list[tuple[str, str]]:
+        """Sync, then list pending tasks in inbox. Returns (filename, content) pairs."""
+        await self._sync.sync_before_read()
         tasks = []
         for f in sorted(self._inbox.glob("*.md")):
             content = f.read_text(encoding="utf-8")
             tasks.append((f.name, content))
         return tasks
+
+    async def sync_health(self) -> dict:
+        """Check vault sync adapter health."""
+        return await self._sync.check_health()
 
     def _dispatch_task(self, filename: str, content: str) -> None:
         """Called by watchdog handler when a new task file appears."""

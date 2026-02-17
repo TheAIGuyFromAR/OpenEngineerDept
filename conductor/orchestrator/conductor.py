@@ -47,6 +47,7 @@ from .tools.test_runner import TestRunner
 from .training.data_collector import DataCollector, TrainingRow, CandidateRecord
 from .training.exemplar_library import ExemplarLibrary, Exemplar
 from .interfaces.obsidian_watcher import ObsidianWatcher
+from .interfaces.vault_sync import create_sync_adapter
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -80,12 +81,24 @@ class Conductor:
         self._data_collector = DataCollector(config.training_data_dir)
         self._exemplar_library = ExemplarLibrary(config.exemplar_library_dir)
 
+        # Vault sync adapter (local, git, or syncthing)
+        sync_adapter = create_sync_adapter(
+            mode=config.vault_sync_mode,
+            vault_path=config.obsidian_vault,
+            git_remote=config.vault_sync_git_remote,
+            git_branch=config.vault_sync_git_branch,
+            syncthing_api=config.vault_sync_syncthing_api,
+            syncthing_api_key=config.vault_sync_syncthing_api_key,
+            syncthing_folder_id=config.vault_sync_syncthing_folder_id,
+        )
+
         # Obsidian interface
         self._watcher = ObsidianWatcher(
             vault_path=config.obsidian_vault,
             layer0_path=config.layer0_path,
             on_new_task=self._handle_new_task,
             on_constraints_changed=self._handle_constraints_changed,
+            sync_adapter=sync_adapter,
         )
 
         # Task queue
@@ -103,8 +116,8 @@ class Conductor:
         # Load project context into gateway
         await self._load_project_context()
 
-        # Process any pending tasks in inbox
-        pending = self._watcher.list_pending()
+        # Process any pending tasks in inbox (sync + scan)
+        pending = await self._watcher.list_pending()
         for filename, content in pending:
             await self._task_queue.put((filename, content))
 
@@ -175,15 +188,15 @@ class Conductor:
 
             # Step 3: Finalize
             if all_passed:
-                self._watcher.write_completed(filename, f"Task {task_id} completed successfully.")
+                await self._watcher.write_completed(filename, f"Task {task_id} completed successfully.")
                 console.print(f"  [bold green]Completed:[/] {task_id}")
             else:
-                self._watcher.write_failed(filename, f"Task {task_id} failed after retries.")
+                await self._watcher.write_failed(filename, f"Task {task_id} failed after retries.")
                 console.print(f"  [bold red]Failed:[/] {task_id}")
 
         except Exception as exc:
             logger.exception("Task %s failed with exception", task_id)
-            self._watcher.write_failed(filename, f"Exception: {exc}")
+            await self._watcher.write_failed(filename, f"Exception: {exc}")
             console.print(f"  [bold red]Error:[/] {exc}")
 
     async def _execute_subtask(
