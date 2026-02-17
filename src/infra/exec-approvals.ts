@@ -249,7 +249,7 @@ export function mergeExecApprovalsSocketDefaults(params: {
   const currentToken = params.current?.socket?.token?.trim();
   const socketPath =
     params.normalized.socket?.path?.trim() ?? currentSocketPath ?? resolveExecApprovalsSocketPath();
-  const token = params.normalized.socket?.token?.trim() ?? currentToken ?? "";
+  const token = params.normalized.socket?.token?.trim() ?? currentToken ?? generateToken();
   return {
     ...params.normalized,
     socket: {

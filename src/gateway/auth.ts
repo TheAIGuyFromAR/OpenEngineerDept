@@ -273,8 +273,13 @@ function authorizeTrustedProxy(params: {
   const user = userHeaderValue.trim();
 
   const allowUsers = trustedProxyConfig.allowUsers ?? [];
-  if (allowUsers.length > 0 && !allowUsers.includes(user)) {
-    return { reason: "trusted_proxy_user_not_allowed" };
+  if (allowUsers.length > 0) {
+    // Case-insensitive comparison to prevent bypass via header casing differences.
+    const normalizedUser = user.toLowerCase();
+    const allowed = allowUsers.some((u) => u.toLowerCase() === normalizedUser);
+    if (!allowed) {
+      return { reason: "trusted_proxy_user_not_allowed" };
+    }
   }
 
   return { user };

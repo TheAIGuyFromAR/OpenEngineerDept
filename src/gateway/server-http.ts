@@ -51,6 +51,7 @@ import {
 import { sendGatewayAuthFailure } from "./http-common.js";
 import { getBearerToken, getHeader } from "./http-utils.js";
 import { isPrivateOrLoopbackAddress, resolveGatewayClientIp } from "./net.js";
+import { applySecurityHeaders } from "./security-headers.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
@@ -478,6 +479,9 @@ export function createGatewayHttpServer(opts: {
     if (String(req.headers.upgrade ?? "").toLowerCase() === "websocket") {
       return;
     }
+
+    // Apply enterprise security headers to every response.
+    applySecurityHeaders(req, res, { enableHsts: Boolean(opts.tlsOptions) });
 
     try {
       const configSnapshot = loadConfig();

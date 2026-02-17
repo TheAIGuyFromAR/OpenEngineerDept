@@ -117,8 +117,24 @@ function foldMarkerChar(char: string): string {
   return char;
 }
 
-function foldMarkerText(input: string): string {
+/**
+ * Strip zero-width and invisible Unicode characters that attackers use
+ * to bypass marker detection: ZWS, ZWNJ, ZWJ, ZWSP, LRM, RLM, BOM,
+ * soft hyphen, word joiner, invisible separator, and other format chars.
+ */
+function stripInvisibleChars(input: string): string {
   return input.replace(
+    /[\u200B\u200C\u200D\u200E\u200F\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u2028\u2029\u202A-\u202E\u2066-\u2069\uFFA0\uFFF9-\uFFFB]/g,
+    "",
+  );
+}
+
+function foldMarkerText(input: string): string {
+  // 1. Apply NFKC normalization to collapse compatibility equivalents
+  // 2. Strip invisible/zero-width characters
+  // 3. Fold remaining fullwidth and angle bracket homoglyphs
+  const normalized = stripInvisibleChars(input.normalize("NFKC"));
+  return normalized.replace(
     /[\uFF21-\uFF3A\uFF41-\uFF5A\uFF1C\uFF1E\u2329\u232A\u3008\u3009\u2039\u203A\u27E8\u27E9\uFE64\uFE65]/g,
     (char) => foldMarkerChar(char),
   );

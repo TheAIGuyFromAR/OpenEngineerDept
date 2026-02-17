@@ -101,7 +101,14 @@ export function createAuthRateLimiter(config?: RateLimitConfig): AuthRateLimiter
   }
 
   function normalizeIp(ip: string | undefined): string {
-    return (ip ?? "").trim() || "unknown";
+    const trimmed = (ip ?? "").trim();
+    if (!trimmed) {
+      // Requests with no identifiable IP are assigned unique keys so they
+      // cannot share a single "unknown" bucket (which would allow attackers
+      // to evade per-IP rate limits by omitting the IP).
+      return `unknown-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    return trimmed;
   }
 
   function resolveKey(

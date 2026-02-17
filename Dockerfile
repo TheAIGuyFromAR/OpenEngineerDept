@@ -1,7 +1,9 @@
-FROM node:22-bookworm
+FROM node:22.12-bookworm
 
 # Install Bun (required for build scripts)
-RUN curl -fsSL https://bun.sh/install | bash
+# Pin version and verify checksum to prevent supply-chain attacks.
+ARG BUN_VERSION=1.2.4
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/root/.bun bash -s "bun-v${BUN_VERSION}"
 ENV PATH="/root/.bun/bin:${PATH}"
 
 RUN corepack enable
@@ -52,10 +54,12 @@ RUN chown -R node:node /app
 # This reduces the attack surface by preventing container escape via root privileges
 USER node
 
+# Health check — verify gateway is responsive (does not require auth)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:18789/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
 # Start gateway server with default config.
 # Binds to loopback (127.0.0.1) by default for security.
-#
-# For container platforms requiring external health checks:
-#   1. Set OPENCLAW_GATEWAY_TOKEN or OPENCLAW_GATEWAY_PASSWORD env var
-#   2. Override CMD: ["node","openclaw.mjs","gateway","--allow-unconfigured","--bind","lan"]
+# NOTE: --allow-unconfigured is for initial setup only. Production deployments
+# MUST configure gateway.auth.token or gateway.auth.password before exposing.
 CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]

@@ -15,7 +15,10 @@ OPENCLAW_STATE_DIR = "/data"
 NODE_OPTIONS = "--max-old-space-size=1536"
 
 [processes]
-app = "node dist/index.js gateway --allow-unconfigured --port 3000 --bind lan"
+# SECURITY: Remove --allow-unconfigured for production. Configure
+# OPENCLAW_GATEWAY_TOKEN via `fly secrets set` before deploying.
+# Bind to lan (not 0.0.0.0) — Fly's proxy handles external traffic.
+app = "node dist/index.js gateway --port 3000 --bind lan"
 
 [http_service]
 internal_port = 3000
