@@ -21,6 +21,13 @@ class OrchestratorConfig(BaseModel):
     training_data_dir: str = "./data/training"
     exemplar_library_dir: str = "./data/exemplars"
 
+    # Inference provider: "local", "anthropic", "openai", or "openrouter"
+    inference_provider: str = "local"
+    inference_api_key: str = ""
+    inference_api_base: str = ""
+    inference_model: str = ""
+    inference_max_tokens: int = 4096
+
     # Vault sync: "local" (default), "git", "syncthing", or "couchdb"
     vault_sync_mode: str = "local"
     # Git sync options

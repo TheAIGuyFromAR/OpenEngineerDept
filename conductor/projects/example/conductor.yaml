@@ -10,6 +10,40 @@ layer0_path: "./constraints.md"
 training_data_dir: "./data/training"
 exemplar_library_dir: "./data/exemplars"
 
+# ── Inference provider ─────────────────────────────────────────────
+# Options: "local" (default), "anthropic", "openai", "openrouter"
+#
+# "local" — runs Qwen3-Coder-Next via llama-server on your hardware.
+#            Requires VRAM/RAM. Best with 32GB+ unified or 2x 24GB GPU.
+#
+# "anthropic" — uses Claude API. No local GPU needed.
+# "openai"    — uses OpenAI API (also works for Azure OpenAI).
+# "openrouter" — uses OpenRouter to access any model via a single API key.
+#
+# When hardware is insufficient for local inference, the system will
+# recommend switching to an API provider at setup time.
+inference_provider: "local"
+
+# --- Anthropic (Claude) ---
+# inference_provider: "anthropic"
+# inference_api_key: "sk-ant-..."
+# inference_model: "claude-sonnet-4-5-20250929"
+# inference_max_tokens: 8192
+
+# --- OpenAI ---
+# inference_provider: "openai"
+# inference_api_key: "sk-..."
+# inference_api_base: "https://api.openai.com/v1"  # or Azure endpoint
+# inference_model: "gpt-4o"
+# inference_max_tokens: 4096
+
+# --- OpenRouter ---
+# inference_provider: "openrouter"
+# inference_api_key: "sk-or-..."
+# inference_api_base: "https://openrouter.ai/api/v1"
+# inference_model: "qwen/qwen3-coder"
+# inference_max_tokens: 4096
+
 # Vault sync — how to keep vault folder in sync with your machine.
 # Options: "local", "git", "syncthing", "couchdb"
 vault_sync_mode: "local"
