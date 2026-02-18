@@ -8,6 +8,7 @@ All operations run in the project directory.
 from __future__ import annotations
 
 import logging
+import shlex
 from dataclasses import dataclass
 
 from .shell import Shell
@@ -67,5 +68,4 @@ class Git:
 
 def _shell_quote(s: str) -> str:
     """Quote a string for safe shell use."""
-    import shlex
     return shlex.quote(s)

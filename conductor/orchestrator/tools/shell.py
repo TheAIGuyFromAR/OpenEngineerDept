@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shlex
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)

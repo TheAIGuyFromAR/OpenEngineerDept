@@ -67,6 +67,11 @@ class ProjectSaveRequest(BaseModel):
     project_id: str
 
 
+class ProjectRestoreRequest(BaseModel):
+    project_id: str
+    worker_slot_ids: list[int] | None = None
+
+
 # ---------------------------------------------------------------------------
 # App state
 # ---------------------------------------------------------------------------
@@ -196,6 +201,18 @@ async def project_save(req: ProjectSaveRequest):
     """Persist current template slot KV cache to NVMe."""
     metric = await slot_manager.save_template(req.project_id)
     return {"project_id": req.project_id, "duration_ms": metric.duration_ms}
+
+
+@app.post("/v1/project/restore")
+async def project_restore(req: ProjectRestoreRequest):
+    """Restore template KV cache into worker slots."""
+    targets = req.worker_slot_ids or config.worker_slot_ids
+    metrics = await slot_manager.restore_workers_parallel(req.project_id, targets)
+    return {
+        "project_id": req.project_id,
+        "restored_slots": targets,
+        "duration_ms": [round(m.duration_ms, 1) for m in metrics],
+    }
 
 
 @app.get("/v1/slots/status")

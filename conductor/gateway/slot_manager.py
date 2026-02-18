@@ -135,7 +135,7 @@ class SlotManager:
             resp.raise_for_status()
 
             # Now save the computed KV cache
-            save_metric = await self.save_template(project_id)
+            await self.save_template(project_id)
 
             elapsed = (time.monotonic() - start) * 1000
             metric = SlotMetrics(

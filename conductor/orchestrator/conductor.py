@@ -268,7 +268,7 @@ class Conductor:
 
             # Apply the selected candidate
             selected_content = candidate_texts[review.selected_idx]
-            apply_result = self._apply_candidate(selected_content)
+            self._apply_candidate(selected_content)
 
             # Run tests
             test_result = await self._test_runner.run()

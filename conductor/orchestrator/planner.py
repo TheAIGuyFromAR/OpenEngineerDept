@@ -13,8 +13,8 @@ Tier heuristics (Phase 0):
 
 from __future__ import annotations
 
+import json
 import logging
-import uuid
 from dataclasses import dataclass, field
 
 import httpx
@@ -106,8 +106,6 @@ class Planner:
 
     def _parse_plan(self, task_id: str, task_text: str, raw: str) -> Plan:
         """Parse LLM output into a structured Plan."""
-        import json
-
         # Try to extract JSON from the response
         try:
             # Handle markdown code blocks
