@@ -112,13 +112,19 @@ detect_gpus() {
 # ═══════════════════════════════════════════════════════════════════
 
 # Known quantization tiers for Qwen3-Coder-Next from unsloth/Qwen3-Coder-Next-GGUF:
-#   Q2_K_XL  — ~10GB, lowest quality (emergency fallback)
-#   Q3_K_XL  — ~14GB, low quality
-#   Q4_K_XL  — ~19GB, good balance (default for 48GB total VRAM)
-#   Q5_K_XL  — ~23GB, high quality
-#   Q6_K     — ~27GB, very high quality
-#   Q8_0     — ~35GB, near-lossless
-#   f16      — ~65GB, full precision (needs massive VRAM)
+#   Q2_K_XL  — ~10GB, ~65-75% quality (DO NOT USE for coding)
+#   Q3_K_XL  — ~14GB, ~80-85% quality (DO NOT USE for coding)
+#   Q4_K_XL  — ~19GB, ~90-92% quality ← MINIMUM for coding tasks
+#   Q5_K_XL  — ~23GB, ~95% quality
+#   Q6_K     — ~27GB, ~97% quality
+#   Q8_0     — ~35GB, ~99% quality (near-lossless)
+#   f16      — ~65GB, 100% quality (baseline)
+#
+# PRINCIPLE: For coding, a larger model at Q4_K beats a smaller model at Q8_0.
+# But below Q4_K there's a quality cliff — quantization errors compound through
+# long reasoning chains and corrupt MoE expert routing decisions.
+# NEVER go below Q4_K for coding. Instead, trade context size, parallel slots,
+# and GPU layers to keep quant quality at Q4_K or above.
 #
 # Memory budget: model weights + KV cache + overhead
 # KV cache at q8_0, ctx=32768, 5 slots ≈ varies by model size
@@ -149,7 +155,7 @@ select_model_config() {
   local ubatch_size=4096
 
   if [[ "$available_gpu_mb" -ge 78000 ]]; then
-    # 80GB+ (A100, H100)
+    # 80GB+ (A100, H100) — luxury tier
     quant="f16"
     model_file="*f16*.gguf"
     ctx_size=65536
@@ -171,23 +177,27 @@ select_model_config() {
     quant="Q4_K_XL"
     model_file="*UD-Q4_K_XL*.gguf"
   elif [[ "$available_gpu_mb" -ge 10000 ]]; then
-    # 12-16GB (RTX 3060 12GB, single smaller card)
-    quant="Q3_K_XL"
-    model_file="*Q3_K_XL*.gguf"
+    # 12-16GB (RTX 3060 12GB) — Q4_K_XL is the floor for coding
+    # Trade context and parallelism to stay at Q4_K
+    quant="Q4_K_XL"
+    model_file="*UD-Q4_K_XL*.gguf"
     ctx_size=16384
     n_parallel=3
+    cache_k="q4_0"
+    cache_v="q4_0"
   elif [[ "$available_gpu_mb" -ge 6000 ]]; then
-    # 8-12GB (RTX 3060 8GB, RTX 2080)
-    quant="Q2_K_XL"
-    model_file="*Q2_K_XL*.gguf"
+    # 8-12GB (RTX 3060 8GB, RTX 2080) — aggressive tradeoffs to hold Q4_K
+    quant="Q4_K_XL"
+    model_file="*UD-Q4_K_XL*.gguf"
     ctx_size=8192
     n_parallel=2
+    n_gpu_layers=40      # partial offload to CPU
     cache_k="q4_0"
     cache_v="q4_0"
   else
-    # Very low VRAM — CPU-heavy offload
-    quant="Q3_K_XL"
-    model_file="*Q3_K_XL*.gguf"
+    # <8GB VRAM — heavy CPU offload, still Q4_K minimum
+    quant="Q4_K_XL"
+    model_file="*UD-Q4_K_XL*.gguf"
     n_gpu_layers=20
     ctx_size=8192
     n_parallel=2
@@ -227,15 +237,13 @@ select_model_config() {
     fi
   fi
 
-  # RAM-based fallback: if insufficient GPU VRAM but lots of RAM,
-  # reduce GPU layers and lean on CPU
-  if [[ "$available_gpu_mb" -lt 10000 ]] && [[ "$total_ram_mb" -ge 64000 ]]; then
-    # Lots of RAM but little VRAM — split layers
-    n_gpu_layers=30
-    # Can afford bigger quant since RAM handles overflow
+  # RAM-based upgrade: if low VRAM but lots of RAM, we can fit the model
+  # in RAM via CPU layers — this is slower but preserves Q4_K quality
+  if [[ "$available_gpu_mb" -lt 14000 ]] && [[ "$total_ram_mb" -ge 64000 ]]; then
+    # Enough RAM to hold Q4_K weights in CPU memory
+    # More GPU layers for speed, CPU handles the rest
     if [[ "$total_ram_mb" -ge 96000 ]]; then
-      quant="Q4_K_XL"
-      model_file="*UD-Q4_K_XL*.gguf"
+      # 96GB+ RAM: can afford larger context
       ctx_size=16384
     fi
   fi
