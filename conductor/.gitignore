@@ -1,0 +1,37 @@
+# Conductor — generated / local-only files
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+dist/
+
+# Inference engine (built locally)
+build/
+ik_llama.cpp/
+
+# Models (too large for git)
+models/
+*.gguf
+
+# Runtime data
+data/kv-cache/
+data/metrics/
+data/training/
+data/exemplars/
+data/reviews/
+
+# Backups (large, local-only)
+backups/
+
+# Hardware profile (machine-specific)
+hardware-profile.env
+
+# Environment (contains secrets)
+.env
+
+# OS
+.DS_Store
+Thumbs.db
