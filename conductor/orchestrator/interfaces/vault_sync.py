@@ -8,6 +8,9 @@ handle the sync transport:
   "local"     — no sync, vault is already local (default)
   "git"       — git pull before read, git add+commit+push after write
   "syncthing" — Syncthing handles it; we just wait for inotify
+  "couchdb"   — Direct CouchDB access for Obsidian LiveSync vaults.
+                Reads/writes documents via CouchDB HTTP API.
+                Syncs CouchDB documents ↔ local vault folder.
 
 The ObsidianWatcher calls sync_before_read() before scanning inbox
 and sync_after_write() after writing completed/failed results.
@@ -169,6 +172,132 @@ class SyncthingSync(VaultSyncAdapter):
             }
 
 
+class CouchDBSync(VaultSyncAdapter):
+    """
+    CouchDB-based sync for Obsidian LiveSync vaults.
+
+    Talks directly to the CouchDB instance that Obsidian LiveSync uses.
+    On sync_before_read: pulls changed documents from CouchDB into the
+    local vault folder so the filesystem watcher can find them.
+    On sync_after_write: pushes local file changes back to CouchDB so
+    other Obsidian instances see them via LiveSync replication.
+    """
+
+    def __init__(
+        self,
+        vault_path: str,
+        couchdb_url: str = "http://localhost:5984",
+        couchdb_database: str = "obsidian",
+        couchdb_username: str = "",
+        couchdb_password: str = "",
+        conductor_prefix: str = "conductor/",
+    ) -> None:
+        self._vault = Path(vault_path)
+        self._prefix = conductor_prefix
+        self._client: CouchDBClient | None = None
+        self._couchdb_url = couchdb_url
+        self._couchdb_database = couchdb_database
+        self._couchdb_username = couchdb_username
+        self._couchdb_password = couchdb_password
+
+    async def _ensure_client(self) -> CouchDBClient:
+        if self._client is None:
+            from .couchdb_client import CouchDBClient
+            self._client = CouchDBClient(
+                url=self._couchdb_url,
+                database=self._couchdb_database,
+                username=self._couchdb_username,
+                password=self._couchdb_password,
+            )
+        return self._client
+
+    async def sync_before_read(self) -> None:
+        """
+        Pull conductor/* documents from CouchDB → local vault folder.
+        This materializes CouchDB documents as local .md files so the
+        filesystem-based ObsidianWatcher can find them.
+        """
+        client = await self._ensure_client()
+        inbox_prefix = f"{self._prefix}inbox/"
+
+        try:
+            # List all docs under conductor/inbox/
+            paths = await client.list_files(inbox_prefix)
+            for path in paths:
+                if not path.endswith(".md"):
+                    continue
+
+                # Read document from CouchDB and reassemble from chunks
+                doc = await client.read_file(path)
+                if doc is None:
+                    continue
+
+                # Write to local filesystem
+                local_path = self._vault / path
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Only write if CouchDB version is newer
+                if local_path.exists():
+                    local_mtime_ms = int(local_path.stat().st_mtime * 1000)
+                    if doc.mtime <= local_mtime_ms:
+                        continue
+
+                local_path.write_text(doc.content, encoding="utf-8")
+                logger.debug("CouchDB → local: %s", path)
+
+        except Exception as exc:
+            logger.warning("CouchDB sync_before_read failed: %s", exc)
+
+    async def sync_after_write(self) -> None:
+        """
+        Push conductor/completed/* and conductor/failed/* back to CouchDB.
+        This makes results visible to Obsidian instances via LiveSync.
+        """
+        client = await self._ensure_client()
+
+        for subdir in ["completed", "failed"]:
+            local_dir = self._vault / self._prefix / subdir
+            if not local_dir.exists():
+                continue
+
+            for local_file in local_dir.glob("*.md"):
+                path = f"{self._prefix}{subdir}/{local_file.name}"
+                content = local_file.read_text(encoding="utf-8")
+
+                try:
+                    await client.write_file(path, content)
+                    logger.debug("local → CouchDB: %s", path)
+                except Exception as exc:
+                    logger.warning("Failed to push %s to CouchDB: %s", path, exc)
+
+        # Also clean up inbox in CouchDB (mark deleted for processed tasks)
+        inbox_dir = self._vault / self._prefix / "inbox"
+        if inbox_dir.exists():
+            # List CouchDB inbox docs
+            try:
+                couch_inbox = await client.list_files(f"{self._prefix}inbox/")
+                local_inbox = {f.name for f in inbox_dir.glob("*.md")}
+
+                for couch_path in couch_inbox:
+                    filename = couch_path.rsplit("/", 1)[-1]
+                    if filename not in local_inbox:
+                        # File was processed (moved to completed/failed locally)
+                        # Mark as deleted in CouchDB
+                        await client.delete_file(couch_path)
+                        logger.debug("CouchDB deleted: %s", couch_path)
+            except Exception as exc:
+                logger.warning("CouchDB inbox cleanup failed: %s", exc)
+
+    async def check_health(self) -> dict:
+        """Check CouchDB connectivity."""
+        try:
+            client = await self._ensure_client()
+            info = await client.check_connection()
+            return {"adapter": "couchdb", **info}
+        except Exception as exc:
+            return {"adapter": "couchdb", "status": "error", "error": str(exc)}
+
+
 def create_sync_adapter(
     mode: str,
     vault_path: str,
@@ -191,5 +320,16 @@ def create_sync_adapter(
             folder_id=kwargs.get("syncthing_folder_id", ""),
             settle_seconds=kwargs.get("syncthing_settle_seconds", 1.0),
         )
+    elif mode == "couchdb":
+        return CouchDBSync(
+            vault_path,
+            couchdb_url=kwargs.get("couchdb_url", "http://localhost:5984"),
+            couchdb_database=kwargs.get("couchdb_database", "obsidian"),
+            couchdb_username=kwargs.get("couchdb_username", ""),
+            couchdb_password=kwargs.get("couchdb_password", ""),
+            conductor_prefix=kwargs.get("couchdb_conductor_prefix", "conductor/"),
+        )
     else:
-        raise ValueError(f"Unknown vault sync mode: {mode!r}. Use: local, git, syncthing")
+        raise ValueError(
+            f"Unknown vault sync mode: {mode!r}. Use: local, git, syncthing, couchdb"
+        )

@@ -11,11 +11,23 @@ training_data_dir: "./data/training"
 exemplar_library_dir: "./data/exemplars"
 
 # Vault sync — how to keep vault folder in sync with your machine.
-# Options: "local" (vault is on this machine), "git" (obsidian-git), "syncthing"
+# Options: "local", "git", "syncthing", "couchdb"
 vault_sync_mode: "local"
+
+# --- CouchDB (Obsidian LiveSync) ---
+# vault_sync_mode: "couchdb"
+# vault_sync_couchdb_url: "http://localhost:5984"
+# vault_sync_couchdb_database: "obsidian"
+# vault_sync_couchdb_username: "admin"
+# vault_sync_couchdb_password: "password"
+# vault_sync_couchdb_conductor_prefix: "conductor/"
+
+# --- Git (obsidian-git plugin) ---
 # vault_sync_mode: "git"
 # vault_sync_git_remote: "origin"
 # vault_sync_git_branch: "main"
+
+# --- Syncthing ---
 # vault_sync_mode: "syncthing"
 # vault_sync_syncthing_api: "http://localhost:8384"
 # vault_sync_syncthing_api_key: "your-api-key"

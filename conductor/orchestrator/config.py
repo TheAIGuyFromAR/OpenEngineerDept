@@ -21,7 +21,7 @@ class OrchestratorConfig(BaseModel):
     training_data_dir: str = "./data/training"
     exemplar_library_dir: str = "./data/exemplars"
 
-    # Vault sync: "local" (default), "git", or "syncthing"
+    # Vault sync: "local" (default), "git", "syncthing", or "couchdb"
     vault_sync_mode: str = "local"
     # Git sync options
     vault_sync_git_remote: str = "origin"
@@ -30,6 +30,12 @@ class OrchestratorConfig(BaseModel):
     vault_sync_syncthing_api: str = "http://localhost:8384"
     vault_sync_syncthing_api_key: str = ""
     vault_sync_syncthing_folder_id: str = ""
+    # CouchDB sync options (Obsidian LiveSync)
+    vault_sync_couchdb_url: str = "http://localhost:5984"
+    vault_sync_couchdb_database: str = "obsidian"
+    vault_sync_couchdb_username: str = ""
+    vault_sync_couchdb_password: str = ""
+    vault_sync_couchdb_conductor_prefix: str = "conductor/"
 
     @classmethod
     def from_yaml(cls, path: str) -> OrchestratorConfig:

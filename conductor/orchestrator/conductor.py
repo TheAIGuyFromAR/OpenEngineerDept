@@ -81,7 +81,7 @@ class Conductor:
         self._data_collector = DataCollector(config.training_data_dir)
         self._exemplar_library = ExemplarLibrary(config.exemplar_library_dir)
 
-        # Vault sync adapter (local, git, or syncthing)
+        # Vault sync adapter (local, git, syncthing, or couchdb)
         sync_adapter = create_sync_adapter(
             mode=config.vault_sync_mode,
             vault_path=config.obsidian_vault,
@@ -90,6 +90,11 @@ class Conductor:
             syncthing_api=config.vault_sync_syncthing_api,
             syncthing_api_key=config.vault_sync_syncthing_api_key,
             syncthing_folder_id=config.vault_sync_syncthing_folder_id,
+            couchdb_url=config.vault_sync_couchdb_url,
+            couchdb_database=config.vault_sync_couchdb_database,
+            couchdb_username=config.vault_sync_couchdb_username,
+            couchdb_password=config.vault_sync_couchdb_password,
+            couchdb_conductor_prefix=config.vault_sync_couchdb_conductor_prefix,
         )
 
         # Obsidian interface
