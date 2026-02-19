@@ -162,6 +162,10 @@ const SENSITIVE_ENV_EXACT = new Set([
   "LINODE_TOKEN",
   "VULTR_API_KEY",
   "FLY_API_TOKEN",
+  "NODE_OPTIONS",
+  "NODE_EXTRA_CA_CERTS",
+  "JAVA_TOOL_OPTIONS",
+  "_JAVA_OPTIONS",
 ]);
 
 /** Suffix patterns that indicate a secret. Matched case-insensitively. */
@@ -184,8 +188,7 @@ const SENSITIVE_ENV_PREFIXES = [
   "GPG_",
   "VAULT_",
   "MAISTRO_GATEWAY_",
-  "MAISTRO_GATEWAY_",
-  "MAISTRO_GATEWAY_",
+  "NPM_CONFIG_",
 ];
 
 /**
