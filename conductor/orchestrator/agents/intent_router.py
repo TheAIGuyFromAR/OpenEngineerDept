@@ -19,7 +19,9 @@ Routing logic:
 
 Intents:
   - CODE: write, fix, refactor, test code
-  - HOME_AUTOMATION: control devices via Abra
+  - HOME_AUTOMATION: control devices via Abra → Home Assistant API
+      Abra translates natural language into HA service calls
+      (light.turn_off, climate.set_temperature, etc.)
   - ARTIFACT: create documents, presentations, etc.
   - ANALYSIS: review, audit, assess code/architecture
   - CONVERSATION: general question, clarification
@@ -70,8 +72,9 @@ _TRIGGER_PATTERNS: list[tuple[re.Pattern, Intent, str]] = [
     (re.compile(r"\btell\s+abra\s+to\b", re.I), Intent.HOME_AUTOMATION, "abra"),
     (re.compile(r"\babra[\s,]+", re.I), Intent.HOME_AUTOMATION, "abra"),
     (re.compile(r"\bturn\s+(on|off)\s+(the\s+)?", re.I), Intent.HOME_AUTOMATION, "abra"),
-    (re.compile(r"\bset\s+(the\s+)?(thermostat|temperature|lights?|brightness)\b", re.I), Intent.HOME_AUTOMATION, "abra"),
-    (re.compile(r"\blight[s]?\s+(on|off|dim|bright)", re.I), Intent.HOME_AUTOMATION, "abra"),
+    (re.compile(r"\b(kill|cut)\s+(the\s+)?light", re.I), Intent.HOME_AUTOMATION, "abra"),
+    (re.compile(r"\bset\s+(the\s+)?(thermostat|thermo|temperature|lights?|lites?|brightness)\b", re.I), Intent.HOME_AUTOMATION, "abra"),
+    (re.compile(r"\b(light|lite)[s]?\s+(on|off|dim|bright)", re.I), Intent.HOME_AUTOMATION, "abra"),
     (re.compile(r"\block\s+(the\s+)?door", re.I), Intent.HOME_AUTOMATION, "abra"),
     (re.compile(r"\barm\s+(the\s+)?(alarm|security)", re.I), Intent.HOME_AUTOMATION, "abra"),
 
@@ -110,7 +113,12 @@ _SAFETY_PATTERNS: list[tuple[re.Pattern, str]] = [
 # Intent keywords for LLM fallback classification
 _INTENT_DESCRIPTIONS = {
     Intent.CODE: "Writing, fixing, or modifying software code (Python, JavaScript, etc.)",
-    Intent.HOME_AUTOMATION: "Controlling smart home devices (lights, thermostat, locks, alarms)",
+    Intent.HOME_AUTOMATION: (
+        "Controlling smart home devices via Home Assistant — lights, thermostat, "
+        "locks, alarms, fans, blinds. The user may say 'tell abra to...' or just "
+        "describe what they want (e.g. 'it's too bright', 'warm it up'). Abra "
+        "translates to HA service calls like light.turn_off, climate.set_temperature."
+    ),
     Intent.ARTIFACT: "Creating documents, presentations, reports, or other text artifacts",
     Intent.ANALYSIS: "Reviewing, auditing, or analyzing existing code or architecture",
     Intent.CONVERSATION: "General question, greeting, or conversational exchange",
