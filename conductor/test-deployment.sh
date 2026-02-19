@@ -594,6 +594,65 @@ phase_result "Full Pipeline Dry Run" "$PHASE6_FAILED"
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Phase 7: Evidence Collection
+#
+# Hard metrics that PROVE the deployment works for real tasks:
+#   - Throughput: tok/s generation speed
+#   - Latency: p50/p95/p99 response times
+#   - Code correctness: generated code executes and passes assertions
+#   - Reasoning quality: known-answer problems scored against expected insights
+#   - Context window: can it actually use the claimed context size?
+#   - Consistency: same prompt N times, how stable are outputs?
+#   - Resources: VRAM/RAM (local) or cost (API)
+# ═══════════════════════════════════════════════════════════════════
+
+phase_header 7 "Evidence Collection"
+PHASE7_FAILED=0
+
+if [[ "$PHASE4_FAILED" -ne 0 ]]; then
+  skip_test "Evidence collection" "Skipped — inference not working"
+else
+  echo "  Running evidence collectors (this takes a few minutes)..."
+  echo ""
+
+  # Read context size from hardware profile or default
+  CTX_SIZE="${CONDUCTOR_CTX_SIZE:-32768}"
+
+  # Read model path for resource measurement
+  MODEL_PATH="${CONDUCTOR_MODEL_PATH:-./models/qwen3-coder-next/Qwen3-Coder-Next-UD-Q4_K_XL.gguf}"
+
+  # Read hardware summary from profile
+  HW_SUMMARY=""
+  if [[ -f "$SCRIPT_DIR/hardware-profile.env" ]]; then
+    HW_SUMMARY=$(grep "^# Hardware:" "$SCRIPT_DIR/hardware-profile.env" 2>/dev/null | sed 's/^# Hardware: //' || true)
+  fi
+
+  EVIDENCE_EXIT=0
+  python3 -m tests.evidence.runner \
+    --gateway "http://localhost:$GATEWAY_PORT" \
+    --provider "$INFERENCE_PROVIDER" \
+    --model "${CONDUCTOR_INFERENCE_MODEL:-local}" \
+    --hardware "$HW_SUMMARY" \
+    --ctx-size "$CTX_SIZE" \
+    --model-path "$MODEL_PATH" \
+    --output-dir "./data/evidence" \
+    2>&1 || EVIDENCE_EXIT=$?
+
+  if [[ "$EVIDENCE_EXIT" -eq 0 ]]; then
+    pass_test "Evidence verdict: PASS"
+  elif [[ "$EVIDENCE_EXIT" -eq 2 ]]; then
+    fail_test "Evidence verdict: DEGRADED" "Deployment works but with reduced quality — see report"
+    PHASE7_FAILED=1
+  else
+    fail_test "Evidence verdict: FAIL" "Deployment not fit for coding tasks — see report"
+    PHASE7_FAILED=1
+  fi
+fi
+
+phase_result "Evidence Collection" "$PHASE7_FAILED"
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Summary
 # ═══════════════════════════════════════════════════════════════════
 
@@ -607,6 +666,13 @@ done
 echo -e "${BOLD}╠══════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║  ${GREEN}Passed: $PASSED${NC}  ${RED}Failed: $FAILED${NC}  ${YELLOW}Skipped: $SKIPPED${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${NC}"
+
+# Point to evidence report
+LATEST_EVIDENCE=$(ls -t ./data/evidence/deployment-*.json 2>/dev/null | head -1 || true)
+if [[ -n "$LATEST_EVIDENCE" ]]; then
+  echo ""
+  echo -e "${CYAN}Evidence report: $LATEST_EVIDENCE${NC}"
+fi
 
 if [[ "$FAILED" -gt 0 ]]; then
   echo ""
