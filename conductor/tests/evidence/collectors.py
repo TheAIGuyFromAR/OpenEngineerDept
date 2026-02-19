@@ -70,6 +70,88 @@ def _extract_python(text: str) -> str:
     return text.strip()
 
 
+# ── Sandboxed code execution ─────────────────────────────────────
+#
+# LLM-generated code is UNTRUSTED. Before executing it, we:
+# 1. AST-parse to block dangerous constructs (imports, builtins, dunders)
+# 2. Execute in subprocess with timeout, no stdin, captured output
+#
+# This is defense-in-depth, not a true sandbox. For production, use
+# Docker with --network=none or a WASM runtime.
+
+import ast
+
+_BLOCKED_NAMES = frozenset({
+    "exec", "eval", "compile", "open", "__import__",
+    "breakpoint", "exit", "quit", "input",
+    "globals", "locals", "vars", "dir",
+    "getattr", "setattr", "delattr",
+})
+
+_BLOCKED_MODULES = frozenset({
+    "os", "sys", "subprocess", "shutil", "pathlib",
+    "socket", "http", "urllib", "requests", "httpx",
+    "ctypes", "importlib", "signal", "multiprocessing",
+    "threading", "pickle", "shelve", "tempfile",
+    "webbrowser", "code", "codeop", "pty",
+})
+
+
+class UnsafeCodeError(Exception):
+    """Raised when LLM-generated code contains disallowed constructs."""
+
+
+def _validate_code_safety(code: str) -> None:
+    """Static analysis: reject code that uses dangerous constructs."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise UnsafeCodeError(f"Syntax error in generated code: {exc}") from exc
+
+    for node in ast.walk(tree):
+        # Block dangerous imports
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                root_module = node.module.split(".")[0]
+                if root_module in _BLOCKED_MODULES:
+                    raise UnsafeCodeError(f"Blocked import: {node.module}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    root_module = alias.name.split(".")[0]
+                    if root_module in _BLOCKED_MODULES:
+                        raise UnsafeCodeError(f"Blocked import: {alias.name}")
+
+        # Block dangerous built-in calls
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in _BLOCKED_NAMES:
+                raise UnsafeCodeError(f"Blocked function call: {func.id}")
+            if isinstance(func, ast.Attribute) and func.attr in _BLOCKED_NAMES:
+                raise UnsafeCodeError(f"Blocked method call: {func.attr}")
+
+        # Block dangerous dunder access
+        if isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") and node.attr.endswith("__"):
+                safe_dunders = {"__init__", "__str__", "__repr__", "__len__",
+                                "__eq__", "__lt__", "__gt__", "__hash__",
+                                "__iter__", "__next__", "__contains__",
+                                "__getitem__", "__setitem__", "__bool__"}
+                if node.attr not in safe_dunders:
+                    raise UnsafeCodeError(f"Blocked dunder access: {node.attr}")
+
+
+def _run_code_sandboxed(code: str, timeout: int = 10) -> subprocess.CompletedProcess:
+    """Validate and execute code with safety checks + resource limits."""
+    _validate_code_safety(code)
+    return subprocess.run(
+        ["python3", "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+    )
+
+
 # ── Throughput + Latency ──────────────────────────────────────────
 
 
@@ -218,28 +300,27 @@ async def collect_correctness(client: httpx.AsyncClient) -> CorrectnessEvidence:
             case.generated_code = _extract_python(content)
             case.generation_ms = elapsed
 
-            # Execute the generated code + test assertions
+            # Execute the generated code + test assertions (sandboxed)
             full_code = case.generated_code + "\n\n" + test_code
-            result = subprocess.run(
-                ["python3", "-c", full_code],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
+            try:
+                result = _run_code_sandboxed(full_code, timeout=10)
+                case.executed = True
+                if result.returncode == 0:
+                    case.passed = True
+                    passed += 1
+                else:
+                    case.passed = False
+                    case.error = (result.stderr or result.stdout).strip()[:200]
+                    failed += 1
+            except UnsafeCodeError as exc:
+                case.executed = False
+                case.error = f"BLOCKED (unsafe code): {exc}"
+                errors += 1
+            except subprocess.TimeoutExpired:
+                case.executed = True
+                case.error = "Execution timed out (10s)"
+                errors += 1
 
-            case.executed = True
-            if result.returncode == 0:
-                case.passed = True
-                passed += 1
-            else:
-                case.passed = False
-                case.error = (result.stderr or result.stdout).strip()[:200]
-                failed += 1
-
-        except subprocess.TimeoutExpired:
-            case.executed = True
-            case.error = "Execution timed out (10s)"
-            errors += 1
         except Exception as exc:
             case.error = str(exc)[:200]
             errors += 1
@@ -323,8 +404,8 @@ async def collect_reasoning(client: httpx.AsyncClient) -> ReasoningEvidence:
                 else:
                     case.keywords_missing.append(kw)
 
-            # Pass if at least 1 keyword found (model identified the core issue)
-            case.passed = len(case.keywords_found) >= 1
+            # Pass if at least 2 keywords found (model must demonstrate depth, not just mention)
+            case.passed = len(case.keywords_found) >= 2
             if case.passed:
                 passed += 1
 
@@ -420,7 +501,7 @@ async def collect_consistency(
         code = _extract_python(content)
         outputs.append(code)
 
-        # Check correctness
+        # Check correctness (sandboxed)
         test_code = code + textwrap.dedent("""
             assert is_prime(2) is True
             assert is_prime(3) is True
@@ -429,15 +510,10 @@ async def collect_consistency(
             assert is_prime(1) is False
         """)
         try:
-            result = subprocess.run(
-                ["python3", "-c", test_code],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            result = _run_code_sandboxed(test_code, timeout=5)
             if result.returncode != 0:
                 all_correct = False
-        except Exception:
+        except (UnsafeCodeError, subprocess.TimeoutExpired):
             all_correct = False
 
     lengths = [len(o) for o in outputs]
