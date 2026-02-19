@@ -33,7 +33,7 @@ function buildSkillsPrompt(workspaceDir: string, managedDir: string, bundledDir:
 }
 
 async function createWorkspaceSkillDirs() {
-  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-"));
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-"));
   return {
     workspaceDir,
     managedDir: path.join(workspaceDir, ".managed"),
@@ -45,7 +45,7 @@ describe("buildWorkspaceSkillsPrompt — .agents/skills/ directories", () => {
   let fakeHome: string;
 
   beforeEach(async () => {
-    fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-home-"));
+    fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-home-"));
     vi.spyOn(os, "homedir").mockReturnValue(fakeHome);
   });
 

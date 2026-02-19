@@ -104,6 +104,132 @@ export function execDockerRaw(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Environment variable sanitization for sandbox containers
+// ---------------------------------------------------------------------------
+
+/** Exact env var names that must never be forwarded into a sandbox. */
+const SENSITIVE_ENV_EXACT = new Set([
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "OPENAI_ORG_ID",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "AZURE_OPENAI_API_KEY",
+  "AZURE_API_KEY",
+  "COHERE_API_KEY",
+  "HUGGINGFACE_API_KEY",
+  "HF_TOKEN",
+  "REPLICATE_API_TOKEN",
+  "TOGETHER_API_KEY",
+  "GROQ_API_KEY",
+  "MISTRAL_API_KEY",
+  "PERPLEXITY_API_KEY",
+  "AI_GATEWAY_API_KEY",
+  "FIRECRAWL_API_KEY",
+  "BRAVE_API_KEY",
+  "ELEVENLABS_API_KEY",
+  "XI_API_KEY",
+  "DEEPGRAM_API_KEY",
+  "ZAI_API_KEY",
+  "MINIMAX_API_KEY",
+  "SYNTHETIC_API_KEY",
+  "TELEGRAM_BOT_TOKEN",
+  "DISCORD_BOT_TOKEN",
+  "SLACK_BOT_TOKEN",
+  "SLACK_APP_TOKEN",
+  "MATTERMOST_BOT_TOKEN",
+  "ZALO_BOT_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITLAB_TOKEN",
+  "NPM_TOKEN",
+  "NODE_AUTH_TOKEN",
+  "DOCKER_AUTH_TOKEN",
+  "DOCKER_PASSWORD",
+  "DATABASE_URL",
+  "REDIS_URL",
+  "MONGO_URI",
+  "SENTRY_DSN",
+  "DATADOG_API_KEY",
+  "DD_API_KEY",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_API_KEY",
+  "VERCEL_TOKEN",
+  "NETLIFY_AUTH_TOKEN",
+  "HEROKU_API_KEY",
+  "DIGITALOCEAN_TOKEN",
+  "LINODE_TOKEN",
+  "VULTR_API_KEY",
+  "FLY_API_TOKEN",
+]);
+
+/** Suffix patterns that indicate a secret. Matched case-insensitively. */
+const SENSITIVE_ENV_SUFFIXES = [
+  "_SECRET",
+  "_TOKEN",
+  "_PASSWORD",
+  "_PASS",
+  "_KEY",
+  "_API_KEY",
+  "_PRIVATE_KEY",
+  "_CREDENTIALS",
+  "_AUTH",
+];
+
+/** Prefix patterns that indicate an entire namespace of secrets. */
+const SENSITIVE_ENV_PREFIXES = [
+  "AWS_",
+  "SSH_",
+  "GPG_",
+  "VAULT_",
+  "MAISTRO_GATEWAY_",
+  "MAISTRO_GATEWAY_",
+  "MAISTRO_GATEWAY_",
+];
+
+/**
+ * Returns true if the given env var name matches a known sensitive pattern.
+ * The check is case-insensitive for suffix/prefix matching.
+ */
+function isSensitiveEnvVar(name: string): boolean {
+  const upper = name.toUpperCase();
+  if (SENSITIVE_ENV_EXACT.has(upper)) {
+    return true;
+  }
+  for (const prefix of SENSITIVE_ENV_PREFIXES) {
+    if (upper.startsWith(prefix)) {
+      return true;
+    }
+  }
+  for (const suffix of SENSITIVE_ENV_SUFFIXES) {
+    if (upper.endsWith(suffix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Filter env vars for sandbox containers. Blocks known-sensitive vars unless
+ * they appear in the explicit allowlist.
+ */
+export function sanitizeSandboxEnv(
+  env: Record<string, string>,
+  allowlist?: Set<string>,
+): { sanitized: Record<string, string>; blocked: string[] } {
+  const sanitized: Record<string, string> = {};
+  const blocked: string[] = [];
+  for (const [key, value] of Object.entries(env)) {
+    if (isSensitiveEnvVar(key) && !allowlist?.has(key)) {
+      blocked.push(key);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return { sanitized, blocked };
+}
+
 import { formatCliCommand } from "../../cli/command-format.js";
 import { defaultRuntime } from "../../runtime.js";
 import { computeSandboxConfigHash } from "./config-hash.js";
@@ -246,11 +372,11 @@ export function buildSandboxCreateArgs(params: {
 
   const createdAtMs = params.createdAtMs ?? Date.now();
   const args = ["create", "--name", params.name];
-  args.push("--label", "openclaw.sandbox=1");
-  args.push("--label", `openclaw.sessionKey=${params.scopeKey}`);
-  args.push("--label", `openclaw.createdAtMs=${createdAtMs}`);
+  args.push("--label", "maistro.sandbox=1");
+  args.push("--label", `maistro.sessionKey=${params.scopeKey}`);
+  args.push("--label", `maistro.createdAtMs=${createdAtMs}`);
   if (params.configHash) {
-    args.push("--label", `openclaw.configHash=${params.configHash}`);
+    args.push("--label", `maistro.configHash=${params.configHash}`);
   }
   for (const [key, value] of Object.entries(params.labels ?? {})) {
     if (key && value) {
@@ -269,7 +395,18 @@ export function buildSandboxCreateArgs(params: {
   if (params.cfg.user) {
     args.push("--user", params.cfg.user);
   }
-  for (const [key, value] of Object.entries(params.cfg.env ?? {})) {
+  // Sanitize env vars: block known secrets from leaking into the sandbox.
+  const rawEnv = params.cfg.env ?? {};
+  const { sanitized: safeEnv, blocked } = sanitizeSandboxEnv(
+    rawEnv,
+    params.cfg.envAllowlist ? new Set(params.cfg.envAllowlist) : undefined,
+  );
+  if (blocked.length > 0) {
+    defaultRuntime.log(
+      `Sandbox env: blocked ${blocked.length} sensitive var(s): ${blocked.join(", ")}`,
+    );
+  }
+  for (const [key, value] of Object.entries(safeEnv)) {
     if (!key.trim()) {
       continue;
     }
@@ -363,18 +500,18 @@ async function createSandboxContainer(params: {
 }
 
 async function readContainerConfigHash(containerName: string): Promise<string | null> {
-  return await readDockerContainerLabel(containerName, "openclaw.configHash");
+  return await readDockerContainerLabel(containerName, "maistro.configHash");
 }
 
 function formatSandboxRecreateHint(params: { scope: SandboxConfig["scope"]; sessionKey: string }) {
   if (params.scope === "session") {
-    return formatCliCommand(`openclaw sandbox recreate --session ${params.sessionKey}`);
+    return formatCliCommand(`maistro sandbox recreate --session ${params.sessionKey}`);
   }
   if (params.scope === "agent") {
     const agentId = resolveSandboxAgentId(params.sessionKey) ?? "main";
-    return formatCliCommand(`openclaw sandbox recreate --agent ${agentId}`);
+    return formatCliCommand(`maistro sandbox recreate --agent ${agentId}`);
   }
-  return formatCliCommand("openclaw sandbox recreate --all");
+  return formatCliCommand("maistro sandbox recreate --all");
 }
 
 export async function ensureSandboxContainer(params: {

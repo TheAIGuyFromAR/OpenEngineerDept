@@ -24,7 +24,7 @@ describe("restart-helper", () => {
     it("creates a systemd restart script on Linux", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "default",
+        MAISTRO_PROFILE: "default",
       });
 
       expect(scriptPath).toBeTruthy();
@@ -32,7 +32,7 @@ describe("restart-helper", () => {
 
       const content = await fs.readFile(scriptPath!, "utf-8");
       expect(content).toContain("#!/bin/sh");
-      expect(content).toContain("systemctl --user restart 'openclaw-gateway.service'");
+      expect(content).toContain("systemctl --user restart 'maistro-gateway.service'");
       // Script should self-cleanup
       expect(content).toContain('rm -f "$0"');
 
@@ -46,7 +46,7 @@ describe("restart-helper", () => {
       process.getuid = () => 501;
 
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "default",
+        MAISTRO_PROFILE: "default",
       });
 
       expect(scriptPath).toBeTruthy();
@@ -54,7 +54,7 @@ describe("restart-helper", () => {
 
       const content = await fs.readFile(scriptPath!, "utf-8");
       expect(content).toContain("#!/bin/sh");
-      expect(content).toContain("launchctl kickstart -k 'gui/501/ai.openclaw.gateway'");
+      expect(content).toContain("launchctl kickstart -k 'gui/501/ai.maistro.gateway'");
       expect(content).toContain('rm -f "$0"');
 
       if (scriptPath) {
@@ -66,7 +66,7 @@ describe("restart-helper", () => {
       Object.defineProperty(process, "platform", { value: "win32" });
 
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "default",
+        MAISTRO_PROFILE: "default",
       });
 
       expect(scriptPath).toBeTruthy();
@@ -74,8 +74,8 @@ describe("restart-helper", () => {
 
       const content = await fs.readFile(scriptPath!, "utf-8");
       expect(content).toContain("@echo off");
-      expect(content).toContain('schtasks /End /TN "OpenClaw Gateway"');
-      expect(content).toContain('schtasks /Run /TN "OpenClaw Gateway"');
+      expect(content).toContain('schtasks /End /TN "Maistro Gateway"');
+      expect(content).toContain('schtasks /Run /TN "Maistro Gateway"');
       // Batch self-cleanup
       expect(content).toContain('del "%~f0"');
 
@@ -87,12 +87,12 @@ describe("restart-helper", () => {
     it("uses custom profile in service names", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "production",
+        MAISTRO_PROFILE: "production",
       });
 
       expect(scriptPath).toBeTruthy();
       const content = await fs.readFile(scriptPath!, "utf-8");
-      expect(content).toContain("openclaw-gateway-production.service");
+      expect(content).toContain("maistro-gateway-production.service");
 
       if (scriptPath) {
         await fs.unlink(scriptPath);
@@ -104,12 +104,12 @@ describe("restart-helper", () => {
       process.getuid = () => 502;
 
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "staging",
+        MAISTRO_PROFILE: "staging",
       });
 
       expect(scriptPath).toBeTruthy();
       const content = await fs.readFile(scriptPath!, "utf-8");
-      expect(content).toContain("gui/502/ai.openclaw.staging");
+      expect(content).toContain("gui/502/ai.maistro.staging");
 
       if (scriptPath) {
         await fs.unlink(scriptPath);
@@ -120,12 +120,12 @@ describe("restart-helper", () => {
       Object.defineProperty(process, "platform", { value: "win32" });
 
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "production",
+        MAISTRO_PROFILE: "production",
       });
 
       expect(scriptPath).toBeTruthy();
       const content = await fs.readFile(scriptPath!, "utf-8");
-      expect(content).toContain('schtasks /End /TN "OpenClaw Gateway (production)"');
+      expect(content).toContain('schtasks /End /TN "Maistro Gateway (production)"');
 
       if (scriptPath) {
         await fs.unlink(scriptPath);
@@ -145,7 +145,7 @@ describe("restart-helper", () => {
         .mockRejectedValueOnce(new Error("simulated write failure"));
 
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "default",
+        MAISTRO_PROFILE: "default",
       });
 
       expect(scriptPath).toBeNull();
@@ -155,7 +155,7 @@ describe("restart-helper", () => {
     it("escapes single quotes in profile names for shell scripts", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "it's-a-test",
+        MAISTRO_PROFILE: "it's-a-test",
       });
 
       expect(scriptPath).toBeTruthy();
@@ -172,7 +172,7 @@ describe("restart-helper", () => {
     it("rejects unsafe batch profile names on Windows", async () => {
       Object.defineProperty(process, "platform", { value: "win32" });
       const scriptPath = await prepareRestartScript({
-        OPENCLAW_PROFILE: "test&whoami",
+        MAISTRO_PROFILE: "test&whoami",
       });
 
       expect(scriptPath).toBeNull();

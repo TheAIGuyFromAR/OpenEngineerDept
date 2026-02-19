@@ -3,10 +3,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   emptyPluginConfigSchema,
-  type OpenClawPluginApi,
+  type MaistroPluginApi,
   type ProviderAuthContext,
   type ProviderAuthResult,
-} from "openclaw/plugin-sdk";
+} from "maistro/plugin-sdk";
 
 const PROVIDER_ID = "openai-codex-import";
 const PROVIDER_LABEL = "OpenAI Codex CLI Import";
@@ -80,7 +80,7 @@ const openaiCodexPlugin = {
   description: "Use OpenAI models via Codex CLI authentication (ChatGPT Plus/Pro)",
   configSchema: emptyPluginConfigSchema(),
 
-  register(api: OpenClawPluginApi) {
+  register(api: MaistroPluginApi) {
     api.registerProvider({
       id: PROVIDER_ID,
       label: PROVIDER_LABEL,

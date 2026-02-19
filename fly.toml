@@ -1,7 +1,7 @@
-# OpenClaw Fly.io deployment configuration
+# Project Maistro Fly.io deployment configuration
 # See https://fly.io/docs/reference/configuration/
 
-app = "openclaw"
+app = "maistro"
 primary_region = "iad" # change to your closest region
 
 [build]
@@ -10,13 +10,13 @@ dockerfile = "Dockerfile"
 [env]
 NODE_ENV = "production"
 # Fly uses x86, but keep this for consistency
-OPENCLAW_PREFER_PNPM = "1"
-OPENCLAW_STATE_DIR = "/data"
+MAISTRO_PREFER_PNPM = "1"
+MAISTRO_STATE_DIR = "/data"
 NODE_OPTIONS = "--max-old-space-size=1536"
 
 [processes]
 # SECURITY: Remove --allow-unconfigured for production. Configure
-# OPENCLAW_GATEWAY_TOKEN via `fly secrets set` before deploying.
+# MAISTRO_GATEWAY_TOKEN via `fly secrets set` before deploying.
 # Bind to lan (not 0.0.0.0) — Fly's proxy handles external traffic.
 app = "node dist/index.js gateway --port 3000 --bind lan"
 
@@ -33,5 +33,5 @@ size = "shared-cpu-2x"
 memory = "2048mb"
 
 [mounts]
-source = "openclaw_data"
+source = "maistro_data"
 destination = "/data"

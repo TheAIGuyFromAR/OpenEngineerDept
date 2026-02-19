@@ -1,12 +1,12 @@
 {
-  "name": "@openclaw/irc",
+  "name": "@maistro/irc",
   "version": "2026.2.16",
-  "description": "OpenClaw IRC channel plugin",
+  "description": "Maistro IRC channel plugin",
   "type": "module",
   "devDependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   },
-  "openclaw": {
+  "maistro": {
     "extensions": [
       "./index.ts"
     ]

@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * producing fixed-length digests regardless of input length. The comparison
  * is always performed in constant time via `timingSafeEqual`.
  */
-const HMAC_KEY = Buffer.from("openclaw-secret-comparison-v2");
+const HMAC_KEY = Buffer.from("maistro-secret-comparison-v2");
 
 export function safeEqualSecret(
   provided: string | undefined | null,

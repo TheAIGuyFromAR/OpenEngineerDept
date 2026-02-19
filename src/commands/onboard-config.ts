@@ -1,9 +1,9 @@
-import type { OpenClawConfig } from "../config/config.js";
+import type { MaistroConfig } from "../config/config.js";
 
 export function applyOnboardingLocalWorkspaceConfig(
-  baseConfig: OpenClawConfig,
+  baseConfig: MaistroConfig,
   workspaceDir: string,
-): OpenClawConfig {
+): MaistroConfig {
   return {
     ...baseConfig,
     agents: {

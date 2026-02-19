@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildDispatchInboundCaptureMock } from "../../../test/helpers/dispatch-inbound-capture.js";
 import type { MsgContext } from "../../auto-reply/templating.js";
-import type { OpenClawConfig } from "../../config/types.js";
+import type { MaistroConfig } from "../../config/types.js";
 import { createBaseSignalEventHandlerDeps } from "./event-handler.test-harness.js";
 
 type SignalMsgContext = MsgContext & {
@@ -76,7 +76,7 @@ function createSignalConfig(params: { requireMention: boolean; mentionPattern?: 
         groups: { "*": { requireMention: params.requireMention } },
       },
     },
-  } as unknown as OpenClawConfig;
+  } as unknown as MaistroConfig;
 }
 
 async function expectSkippedGroupHistory(opts: GroupEventOpts, expectedBody: string) {

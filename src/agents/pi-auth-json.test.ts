@@ -7,7 +7,7 @@ import { ensurePiAuthJsonFromAuthProfiles } from "./pi-auth-json.js";
 
 describe("ensurePiAuthJsonFromAuthProfiles", () => {
   it("writes openai-codex oauth credentials into auth.json for pi-coding-agent discovery", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -41,7 +41,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("writes api_key credentials into auth.json", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -69,7 +69,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("writes token credentials as api_key into auth.json", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -97,7 +97,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("syncs multiple providers at once", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -137,7 +137,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("skips profiles with empty keys", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -158,7 +158,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("skips expired token credentials", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -180,7 +180,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("normalizes provider ids when writing auth.json keys", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
 
     saveAuthProfileStore(
       {
@@ -206,7 +206,7 @@ describe("ensurePiAuthJsonFromAuthProfiles", () => {
   });
 
   it("preserves existing auth.json entries not in auth-profiles", async () => {
-    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-agent-"));
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "maistro-agent-"));
     const authPath = path.join(agentDir, "auth.json");
 
     // Pre-populate auth.json with an entry

@@ -1,5 +1,5 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import { createReplyPrefixOptions } from "openclaw/plugin-sdk";
+import type { MaistroConfig } from "maistro/plugin-sdk";
+import { createReplyPrefixOptions } from "maistro/plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
 import { mattermostPlugin } from "./channel.js";
 
@@ -39,7 +39,7 @@ describe("mattermostPlugin", () => {
 
   describe("messageActions", () => {
     it("exposes react when mattermost is configured", () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -56,7 +56,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("hides react when mattermost is not configured", () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -69,7 +69,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("hides react when actions.reactions is false", () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -86,7 +86,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("respects per-account actions.reactions in listActions", () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -108,7 +108,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("blocks react when default account disables reactions and accountId is omitted", async () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -136,7 +136,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("handles react by calling Mattermost reactions API", async () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -189,7 +189,7 @@ describe("mattermostPlugin", () => {
     });
 
     it("only treats boolean remove flag as removal", async () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             enabled: true,
@@ -246,14 +246,14 @@ describe("mattermostPlugin", () => {
       const formatAllowFrom = mattermostPlugin.config.formatAllowFrom!;
 
       const formatted = formatAllowFrom({
-        cfg: {} as OpenClawConfig,
+        cfg: {} as MaistroConfig,
         allowFrom: ["@Alice", "user:USER123", "mattermost:BOT999"],
       });
       expect(formatted).toEqual(["@alice", "user123", "bot999"]);
     });
 
     it("uses account responsePrefix overrides", () => {
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         channels: {
           mattermost: {
             responsePrefix: "[Channel]",

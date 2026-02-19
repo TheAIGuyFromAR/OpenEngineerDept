@@ -87,7 +87,7 @@ export async function ensureConfigReady(params: {
   }
   params.runtime.error("");
   params.runtime.error(
-    `${muted("Run:")} ${commandText(formatCliCommand("openclaw doctor --fix"))}`,
+    `${muted("Run:")} ${commandText(formatCliCommand("maistro doctor --fix"))}`,
   );
   if (!allowInvalid) {
     params.runtime.exit(1);

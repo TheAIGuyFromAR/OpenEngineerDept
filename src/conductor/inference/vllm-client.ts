@@ -13,6 +13,7 @@
  * throughout the Conductor pipeline.
  */
 
+import { randomBytes } from "node:crypto";
 import type {
   InferenceRequest,
   InferenceResponse,
@@ -409,7 +410,7 @@ function buildMetric(
   retries: number,
 ): InferenceMetric {
   return {
-    requestId: `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    requestId: `req-${Date.now()}-${randomBytes(4).toString("hex")}`,
     modelId: endpoint.modelId,
     loraAdapter: endpoint.loraAdapter ?? null,
     promptTokens: 0, // Not available from non-usage response

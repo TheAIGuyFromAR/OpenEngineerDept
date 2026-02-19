@@ -132,7 +132,7 @@ describe("cli program (nodes media)", () => {
     );
 
     await expectLoggedSingleMediaFile({
-      expectedPathPattern: /openclaw-camera-clip-front-.*\.mp4$/,
+      expectedPathPattern: /maistro-camera-clip-front-.*\.mp4$/,
     });
   });
 
@@ -267,7 +267,7 @@ describe("cli program (nodes media)", () => {
     );
 
     await expectLoggedSingleMediaFile({
-      expectedPathPattern: /openclaw-canvas-snapshot-.*\.png$/,
+      expectedPathPattern: /maistro-canvas-snapshot-.*\.png$/,
     });
   });
 
@@ -322,7 +322,7 @@ describe("cli program (nodes media)", () => {
       );
 
       await expectLoggedSingleMediaFile({
-        expectedPathPattern: /openclaw-camera-snap-front-.*\.jpg$/,
+        expectedPathPattern: /maistro-camera-snap-front-.*\.jpg$/,
         expectedContent: "url-content",
       });
     });
@@ -343,7 +343,7 @@ describe("cli program (nodes media)", () => {
       );
 
       await expectLoggedSingleMediaFile({
-        expectedPathPattern: /openclaw-camera-clip-front-.*\.mp4$/,
+        expectedPathPattern: /maistro-camera-clip-front-.*\.mp4$/,
         expectedContent: "url-content",
       });
     });

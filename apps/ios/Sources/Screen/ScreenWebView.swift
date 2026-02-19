@@ -1,4 +1,4 @@
-import OpenClawKit
+import MaistroKit
 import SwiftUI
 import WebKit
 

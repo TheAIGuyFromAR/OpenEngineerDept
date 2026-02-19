@@ -8,6 +8,8 @@ export type SandboxDockerConfig = {
   user?: string;
   capDrop: string[];
   env?: Record<string, string>;
+  /** Env var names explicitly allowed to pass through even if they match sensitive patterns. */
+  envAllowlist?: string[];
   setupCommand?: string;
   pidsLimit?: number;
   memory?: string | number;

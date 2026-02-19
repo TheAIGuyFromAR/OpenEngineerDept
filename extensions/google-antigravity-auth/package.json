@@ -1,13 +1,13 @@
 {
-  "name": "@openclaw/google-antigravity-auth",
+  "name": "@maistro/google-antigravity-auth",
   "version": "2026.2.16",
   "private": true,
-  "description": "OpenClaw Google Antigravity OAuth provider plugin",
+  "description": "Maistro Google Antigravity OAuth provider plugin",
   "type": "module",
   "devDependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   },
-  "openclaw": {
+  "maistro": {
     "extensions": [
       "./index.ts"
     ]

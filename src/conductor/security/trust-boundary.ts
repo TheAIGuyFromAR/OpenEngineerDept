@@ -12,6 +12,7 @@
 
 import type { AgentId, AgentRole, HandoffMessage, PermissionScope, TaskSpec } from "../types.js";
 import { DEFAULT_PERMISSIONS } from "../types.js";
+import { secureId } from "../../utils/secure-random.js";
 
 export type PermissionGrant = {
   grantId: string;
@@ -130,7 +131,7 @@ export function createPermissionGrant(params: {
   const ttl = params.ttlMs ?? baseScope.timeoutMs;
 
   return {
-    grantId: `grant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    grantId: `grant-${Date.now()}-${secureId(6)}`,
     grantedBy: params.conductorId,
     grantedTo: params.targetAgentId,
     scope,

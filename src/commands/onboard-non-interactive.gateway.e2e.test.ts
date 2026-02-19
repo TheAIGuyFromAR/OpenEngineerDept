@@ -76,15 +76,15 @@ async function expectGatewayTokenAuth(params: {
 describe("onboard (non-interactive): gateway and remote auth", () => {
   const prev = {
     home: process.env.HOME,
-    stateDir: process.env.OPENCLAW_STATE_DIR,
-    configPath: process.env.OPENCLAW_CONFIG_PATH,
-    skipChannels: process.env.OPENCLAW_SKIP_CHANNELS,
-    skipGmail: process.env.OPENCLAW_SKIP_GMAIL_WATCHER,
-    skipCron: process.env.OPENCLAW_SKIP_CRON,
-    skipCanvas: process.env.OPENCLAW_SKIP_CANVAS_HOST,
-    skipBrowser: process.env.OPENCLAW_SKIP_BROWSER_CONTROL_SERVER,
-    token: process.env.OPENCLAW_GATEWAY_TOKEN,
-    password: process.env.OPENCLAW_GATEWAY_PASSWORD,
+    stateDir: process.env.MAISTRO_STATE_DIR,
+    configPath: process.env.MAISTRO_CONFIG_PATH,
+    skipChannels: process.env.MAISTRO_SKIP_CHANNELS,
+    skipGmail: process.env.MAISTRO_SKIP_GMAIL_WATCHER,
+    skipCron: process.env.MAISTRO_SKIP_CRON,
+    skipCanvas: process.env.MAISTRO_SKIP_CANVAS_HOST,
+    skipBrowser: process.env.MAISTRO_SKIP_BROWSER_CONTROL_SERVER,
+    token: process.env.MAISTRO_GATEWAY_TOKEN,
+    password: process.env.MAISTRO_GATEWAY_PASSWORD,
   };
   let tempHome: string | undefined;
 
@@ -93,8 +93,8 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       throw new Error("temp home not initialized");
     }
     const stateDir = await fs.mkdtemp(path.join(tempHome, prefix));
-    process.env.OPENCLAW_STATE_DIR = stateDir;
-    delete process.env.OPENCLAW_CONFIG_PATH;
+    process.env.MAISTRO_STATE_DIR = stateDir;
+    delete process.env.MAISTRO_CONFIG_PATH;
     return stateDir;
   };
   const withStateDir = async (
@@ -109,15 +109,15 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     }
   };
   beforeAll(async () => {
-    process.env.OPENCLAW_SKIP_CHANNELS = "1";
-    process.env.OPENCLAW_SKIP_GMAIL_WATCHER = "1";
-    process.env.OPENCLAW_SKIP_CRON = "1";
-    process.env.OPENCLAW_SKIP_CANVAS_HOST = "1";
-    process.env.OPENCLAW_SKIP_BROWSER_CONTROL_SERVER = "1";
-    delete process.env.OPENCLAW_GATEWAY_TOKEN;
-    delete process.env.OPENCLAW_GATEWAY_PASSWORD;
+    process.env.MAISTRO_SKIP_CHANNELS = "1";
+    process.env.MAISTRO_SKIP_GMAIL_WATCHER = "1";
+    process.env.MAISTRO_SKIP_CRON = "1";
+    process.env.MAISTRO_SKIP_CANVAS_HOST = "1";
+    process.env.MAISTRO_SKIP_BROWSER_CONTROL_SERVER = "1";
+    delete process.env.MAISTRO_GATEWAY_TOKEN;
+    delete process.env.MAISTRO_GATEWAY_PASSWORD;
 
-    tempHome = await makeTempWorkspace("openclaw-onboard-");
+    tempHome = await makeTempWorkspace("maistro-onboard-");
     process.env.HOME = tempHome;
   });
 
@@ -126,21 +126,21 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       await fs.rm(tempHome, { recursive: true, force: true });
     }
     process.env.HOME = prev.home;
-    process.env.OPENCLAW_STATE_DIR = prev.stateDir;
-    process.env.OPENCLAW_CONFIG_PATH = prev.configPath;
-    process.env.OPENCLAW_SKIP_CHANNELS = prev.skipChannels;
-    process.env.OPENCLAW_SKIP_GMAIL_WATCHER = prev.skipGmail;
-    process.env.OPENCLAW_SKIP_CRON = prev.skipCron;
-    process.env.OPENCLAW_SKIP_CANVAS_HOST = prev.skipCanvas;
-    process.env.OPENCLAW_SKIP_BROWSER_CONTROL_SERVER = prev.skipBrowser;
-    process.env.OPENCLAW_GATEWAY_TOKEN = prev.token;
-    process.env.OPENCLAW_GATEWAY_PASSWORD = prev.password;
+    process.env.MAISTRO_STATE_DIR = prev.stateDir;
+    process.env.MAISTRO_CONFIG_PATH = prev.configPath;
+    process.env.MAISTRO_SKIP_CHANNELS = prev.skipChannels;
+    process.env.MAISTRO_SKIP_GMAIL_WATCHER = prev.skipGmail;
+    process.env.MAISTRO_SKIP_CRON = prev.skipCron;
+    process.env.MAISTRO_SKIP_CANVAS_HOST = prev.skipCanvas;
+    process.env.MAISTRO_SKIP_BROWSER_CONTROL_SERVER = prev.skipBrowser;
+    process.env.MAISTRO_GATEWAY_TOKEN = prev.token;
+    process.env.MAISTRO_GATEWAY_PASSWORD = prev.password;
   });
 
   it("writes gateway token auth into config and gateway enforces it", async () => {
     await withStateDir("state-noninteractive-", async (stateDir) => {
       const token = "tok_test_123";
-      const workspace = path.join(stateDir, "openclaw");
+      const workspace = path.join(stateDir, "maistro");
 
       await runNonInteractiveOnboarding(
         {
@@ -218,11 +218,11 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       return;
     }
     await withStateDir("state-lan-", async (stateDir) => {
-      process.env.OPENCLAW_STATE_DIR = stateDir;
-      process.env.OPENCLAW_CONFIG_PATH = path.join(stateDir, "openclaw.json");
+      process.env.MAISTRO_STATE_DIR = stateDir;
+      process.env.MAISTRO_CONFIG_PATH = path.join(stateDir, "maistro.json");
 
       const port = await getFreeGatewayPort();
-      const workspace = path.join(stateDir, "openclaw");
+      const workspace = path.join(stateDir, "maistro");
 
       await runNonInteractiveOnboarding(
         {

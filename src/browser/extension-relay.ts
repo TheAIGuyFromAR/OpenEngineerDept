@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -80,7 +80,7 @@ type ConnectedTarget = {
   targetInfo: TargetInfo;
 };
 
-const RELAY_AUTH_HEADER = "x-openclaw-relay-token";
+const RELAY_AUTH_HEADER = "x-maistro-relay-token";
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   if (!value) {
@@ -267,9 +267,9 @@ export async function ensureChromeExtensionRelayServer(opts: {
       case "Browser.getVersion":
         return {
           protocolVersion: "1.3",
-          product: "Chrome/OpenClaw-Extension-Relay",
+          product: "Chrome/Maistro-Extension-Relay",
           revision: "0",
-          userAgent: "OpenClaw-Extension-Relay",
+          userAgent: "Maistro-Extension-Relay",
           jsVersion: "V8",
         };
       case "Browser.setDownloadBehavior":
@@ -373,7 +373,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
       (req.method === "GET" || req.method === "PUT")
     ) {
       const payload: Record<string, unknown> = {
-        Browser: "OpenClaw/extension-relay",
+        Browser: "Maistro/extension-relay",
         "Protocol-Version": "1.3",
       };
       // Only advertise the WS URL if a real extension is connected.
@@ -732,7 +732,7 @@ export async function ensureChromeExtensionRelayServer(opts: {
       const isAddrInUse = (err as { code?: string }).code === "EADDRINUSE";
       if (isAddrInUse && attempt < maxRetries - 1) {
         // Try a random port in the dynamic range (49152-65535)
-        boundPort = Math.floor(Math.random() * (65535 - 49152 + 1)) + 49152;
+        boundPort = randomInt(49152, 65536);
         logService.warn(`Port ${info.port} is in use, trying alternative port ${boundPort}...`);
       } else {
         throw err;

@@ -1,13 +1,13 @@
 {
-  "name": "@openclaw/llm-task",
+  "name": "@maistro/llm-task",
   "version": "2026.2.16",
   "private": true,
-  "description": "OpenClaw JSON-only LLM task plugin",
+  "description": "Maistro JSON-only LLM task plugin",
   "type": "module",
   "devDependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   },
-  "openclaw": {
+  "maistro": {
     "extensions": [
       "./index.ts"
     ]

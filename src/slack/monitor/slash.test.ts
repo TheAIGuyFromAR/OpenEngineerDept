@@ -247,7 +247,7 @@ function createArgMenusHarness() {
     channelsConfig: undefined,
     slashCommand: {
       enabled: true,
-      name: "openclaw",
+      name: "maistro",
       ephemeral: true,
       sessionPrefix: "slack:slash",
     },
@@ -312,12 +312,12 @@ describe("Slack native command argument menus", () => {
     }
     unsafeConfirmHandler = unsafeConfirm;
 
-    const argMenu = harness.actions.get("openclaw_cmdarg");
+    const argMenu = harness.actions.get("maistro_cmdarg");
     if (!argMenu) {
       throw new Error("Missing arg-menu action handler");
     }
     argMenuHandler = argMenu;
-    const argMenuOptions = harness.options.get("openclaw_cmdarg");
+    const argMenuOptions = harness.options.get("maistro_cmdarg");
     if (!argMenuOptions) {
       throw new Error("Missing arg-menu options handler");
     }
@@ -381,7 +381,7 @@ describe("Slack native command argument menus", () => {
     const actions = findFirstActionsBlock(payload);
     const element = actions?.elements?.[0];
     expect(element?.type).toBe("static_select");
-    expect(element?.action_id).toBe("openclaw_cmdarg");
+    expect(element?.action_id).toBe("maistro_cmdarg");
     expect(element?.confirm).toBeTruthy();
   });
 
@@ -432,7 +432,7 @@ describe("Slack native command argument menus", () => {
     const actions = findFirstActionsBlock(payload);
     const element = actions?.elements?.[0];
     expect(element?.type).toBe("overflow");
-    expect(element?.action_id).toBe("openclaw_cmdarg");
+    expect(element?.action_id).toBe("maistro_cmdarg");
     expect(element?.confirm).toBeTruthy();
   });
 
@@ -557,9 +557,9 @@ describe("Slack native command argument menus", () => {
     const actions = findFirstActionsBlock(payload);
     const element = actions?.elements?.[0];
     expect(element?.type).toBe("external_select");
-    expect(element?.action_id).toBe("openclaw_cmdarg");
+    expect(element?.action_id).toBe("maistro_cmdarg");
     expect(payload.blocks?.find((block) => block.type === "actions")?.block_id).toContain(
-      "openclaw_cmdarg_ext:",
+      "maistro_cmdarg_ext:",
     );
   });
 
@@ -584,7 +584,7 @@ describe("Slack native command argument menus", () => {
       blocks?: Array<{ type: string; block_id?: string }>;
     };
     const blockId = payload.blocks?.find((block) => block.type === "actions")?.block_id;
-    expect(blockId).toContain("openclaw_cmdarg_ext:");
+    expect(blockId).toContain("maistro_cmdarg_ext:");
 
     const ackOptions = vi.fn().mockResolvedValue(undefined);
     await argMenuOptionsHandler({
@@ -698,7 +698,7 @@ function createPolicyHarness(overrides?: {
     channelsConfig: overrides?.channelsConfig,
     slashCommand: {
       enabled: true,
-      name: "openclaw",
+      name: "maistro",
       ephemeral: true,
       sessionPrefix: "slack:slash",
     },

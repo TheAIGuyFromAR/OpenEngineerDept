@@ -20,12 +20,12 @@ describe("waitForever", () => {
 
 describe("shouldSkipRespawnForArgv", () => {
   it("skips respawn for help/version calls", () => {
-    expect(shouldSkipRespawnForArgv(["node", "openclaw", "--help"])).toBe(true);
-    expect(shouldSkipRespawnForArgv(["node", "openclaw", "-V"])).toBe(true);
+    expect(shouldSkipRespawnForArgv(["node", "maistro", "--help"])).toBe(true);
+    expect(shouldSkipRespawnForArgv(["node", "maistro", "-V"])).toBe(true);
   });
 
   it("keeps respawn path for normal commands", () => {
-    expect(shouldSkipRespawnForArgv(["node", "openclaw", "status"])).toBe(false);
+    expect(shouldSkipRespawnForArgv(["node", "maistro", "status"])).toBe(false);
   });
 });
 
@@ -50,10 +50,10 @@ describe("dns cli", () => {
     try {
       const program = new Command();
       registerDnsCli(program);
-      await program.parseAsync(["dns", "setup", "--domain", "openclaw.internal"], { from: "user" });
+      await program.parseAsync(["dns", "setup", "--domain", "maistro.internal"], { from: "user" });
       const output = log.mock.calls.map((call) => call.join(" ")).join("\\n");
       expect(output).toContain("DNS setup");
-      expect(output).toContain("openclaw.internal");
+      expect(output).toContain("maistro.internal");
     } finally {
       log.mockRestore();
     }

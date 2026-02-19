@@ -1,8 +1,8 @@
 {
-  "name": "@openclaw/memory-lancedb",
+  "name": "@maistro/memory-lancedb",
   "version": "2026.2.16",
   "private": true,
-  "description": "OpenClaw LanceDB-backed long-term memory plugin with auto-recall/capture",
+  "description": "Maistro LanceDB-backed long-term memory plugin with auto-recall/capture",
   "type": "module",
   "dependencies": {
     "@lancedb/lancedb": "^0.26.2",
@@ -10,9 +10,9 @@
     "openai": "^6.22.0"
   },
   "devDependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   },
-  "openclaw": {
+  "maistro": {
     "extensions": [
       "./index.ts"
     ]

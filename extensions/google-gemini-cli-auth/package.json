@@ -1,13 +1,13 @@
 {
-  "name": "@openclaw/google-gemini-cli-auth",
+  "name": "@maistro/google-gemini-cli-auth",
   "version": "2026.2.16",
   "private": true,
-  "description": "OpenClaw Gemini CLI OAuth provider plugin",
+  "description": "Maistro Gemini CLI OAuth provider plugin",
   "type": "module",
   "devDependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   },
-  "openclaw": {
+  "maistro": {
     "extensions": [
       "./index.ts"
     ]

@@ -81,43 +81,43 @@ vi.mock("./progress.js", () => ({
 
 describe("daemon-cli coverage", () => {
   const originalEnv = {
-    OPENCLAW_STATE_DIR: process.env.OPENCLAW_STATE_DIR,
-    OPENCLAW_CONFIG_PATH: process.env.OPENCLAW_CONFIG_PATH,
-    OPENCLAW_GATEWAY_PORT: process.env.OPENCLAW_GATEWAY_PORT,
-    OPENCLAW_PROFILE: process.env.OPENCLAW_PROFILE,
+    MAISTRO_STATE_DIR: process.env.MAISTRO_STATE_DIR,
+    MAISTRO_CONFIG_PATH: process.env.MAISTRO_CONFIG_PATH,
+    MAISTRO_GATEWAY_PORT: process.env.MAISTRO_GATEWAY_PORT,
+    MAISTRO_PROFILE: process.env.MAISTRO_PROFILE,
   };
 
   beforeEach(() => {
-    process.env.OPENCLAW_STATE_DIR = "/tmp/openclaw-cli-state";
-    process.env.OPENCLAW_CONFIG_PATH = "/tmp/openclaw-cli-state/openclaw.json";
-    delete process.env.OPENCLAW_GATEWAY_PORT;
-    delete process.env.OPENCLAW_PROFILE;
+    process.env.MAISTRO_STATE_DIR = "/tmp/maistro-cli-state";
+    process.env.MAISTRO_CONFIG_PATH = "/tmp/maistro-cli-state/maistro.json";
+    delete process.env.MAISTRO_GATEWAY_PORT;
+    delete process.env.MAISTRO_PROFILE;
     serviceReadCommand.mockResolvedValue(null);
   });
 
   afterEach(() => {
-    if (originalEnv.OPENCLAW_STATE_DIR !== undefined) {
-      process.env.OPENCLAW_STATE_DIR = originalEnv.OPENCLAW_STATE_DIR;
+    if (originalEnv.MAISTRO_STATE_DIR !== undefined) {
+      process.env.MAISTRO_STATE_DIR = originalEnv.MAISTRO_STATE_DIR;
     } else {
-      delete process.env.OPENCLAW_STATE_DIR;
+      delete process.env.MAISTRO_STATE_DIR;
     }
 
-    if (originalEnv.OPENCLAW_CONFIG_PATH !== undefined) {
-      process.env.OPENCLAW_CONFIG_PATH = originalEnv.OPENCLAW_CONFIG_PATH;
+    if (originalEnv.MAISTRO_CONFIG_PATH !== undefined) {
+      process.env.MAISTRO_CONFIG_PATH = originalEnv.MAISTRO_CONFIG_PATH;
     } else {
-      delete process.env.OPENCLAW_CONFIG_PATH;
+      delete process.env.MAISTRO_CONFIG_PATH;
     }
 
-    if (originalEnv.OPENCLAW_GATEWAY_PORT !== undefined) {
-      process.env.OPENCLAW_GATEWAY_PORT = originalEnv.OPENCLAW_GATEWAY_PORT;
+    if (originalEnv.MAISTRO_GATEWAY_PORT !== undefined) {
+      process.env.MAISTRO_GATEWAY_PORT = originalEnv.MAISTRO_GATEWAY_PORT;
     } else {
-      delete process.env.OPENCLAW_GATEWAY_PORT;
+      delete process.env.MAISTRO_GATEWAY_PORT;
     }
 
-    if (originalEnv.OPENCLAW_PROFILE !== undefined) {
-      process.env.OPENCLAW_PROFILE = originalEnv.OPENCLAW_PROFILE;
+    if (originalEnv.MAISTRO_PROFILE !== undefined) {
+      process.env.MAISTRO_PROFILE = originalEnv.MAISTRO_PROFILE;
     } else {
-      delete process.env.OPENCLAW_PROFILE;
+      delete process.env.MAISTRO_PROFILE;
     }
   });
 
@@ -148,10 +148,10 @@ describe("daemon-cli coverage", () => {
     serviceReadCommand.mockResolvedValueOnce({
       programArguments: ["/bin/node", "cli", "gateway", "--port", "19001"],
       environment: {
-        OPENCLAW_PROFILE: "dev",
-        OPENCLAW_STATE_DIR: "/tmp/openclaw-daemon-state",
-        OPENCLAW_CONFIG_PATH: "/tmp/openclaw-daemon-state/openclaw.json",
-        OPENCLAW_GATEWAY_PORT: "19001",
+        MAISTRO_PROFILE: "dev",
+        MAISTRO_STATE_DIR: "/tmp/maistro-daemon-state",
+        MAISTRO_CONFIG_PATH: "/tmp/maistro-daemon-state/maistro.json",
+        MAISTRO_GATEWAY_PORT: "19001",
       },
       sourcePath: "/tmp/bot.molt.gateway.plist",
     });

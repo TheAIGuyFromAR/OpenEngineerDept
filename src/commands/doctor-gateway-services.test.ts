@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { OpenClawConfig } from "../config/config.js";
+import type { MaistroConfig } from "../config/config.js";
 
 const mocks = vi.hoisted(() => ({
   readCommand: vi.fn(),
@@ -54,9 +54,9 @@ import { maybeRepairGatewayServiceConfig } from "./doctor-gateway-services.js";
 describe("maybeRepairGatewayServiceConfig", () => {
   it("treats gateway.auth.token as source of truth for service token repairs", async () => {
     mocks.readCommand.mockResolvedValue({
-      programArguments: ["/usr/bin/node", "/usr/local/bin/openclaw", "gateway", "--port", "18789"],
+      programArguments: ["/usr/bin/node", "/usr/local/bin/maistro", "gateway", "--port", "18789"],
       environment: {
-        OPENCLAW_GATEWAY_TOKEN: "stale-token",
+        MAISTRO_GATEWAY_TOKEN: "stale-token",
       },
     });
     mocks.auditGatewayServiceConfig.mockResolvedValue({
@@ -64,21 +64,21 @@ describe("maybeRepairGatewayServiceConfig", () => {
       issues: [
         {
           code: "gateway-token-mismatch",
-          message: "Gateway service OPENCLAW_GATEWAY_TOKEN does not match gateway.auth.token",
+          message: "Gateway service MAISTRO_GATEWAY_TOKEN does not match gateway.auth.token",
           level: "recommended",
         },
       ],
     });
     mocks.buildGatewayInstallPlan.mockResolvedValue({
-      programArguments: ["/usr/bin/node", "/usr/local/bin/openclaw", "gateway", "--port", "18789"],
+      programArguments: ["/usr/bin/node", "/usr/local/bin/maistro", "gateway", "--port", "18789"],
       workingDirectory: "/tmp",
       environment: {
-        OPENCLAW_GATEWAY_TOKEN: "config-token",
+        MAISTRO_GATEWAY_TOKEN: "config-token",
       },
     });
     mocks.install.mockResolvedValue(undefined);
 
-    const cfg: OpenClawConfig = {
+    const cfg: MaistroConfig = {
       gateway: {
         auth: {
           mode: "token",

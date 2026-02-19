@@ -1,6 +1,6 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import { createAccountListHelpers } from "openclaw/plugin-sdk";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
+import type { MaistroConfig } from "maistro/plugin-sdk";
+import { createAccountListHelpers } from "maistro/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "maistro/plugin-sdk/account-id";
 import type { GoogleChatAccountConfig } from "./types.config.js";
 
 export type GoogleChatCredentialSource = "file" | "inline" | "env" | "none";
@@ -21,7 +21,7 @@ const ENV_SERVICE_ACCOUNT_FILE = "GOOGLE_CHAT_SERVICE_ACCOUNT_FILE";
 const { listAccountIds } = createAccountListHelpers("googlechat");
 export const listGoogleChatAccountIds = listAccountIds;
 
-export function resolveDefaultGoogleChatAccountId(cfg: OpenClawConfig): string {
+export function resolveDefaultGoogleChatAccountId(cfg: MaistroConfig): string {
   const channel = cfg.channels?.["googlechat"];
   if (channel?.defaultAccount?.trim()) {
     return channel.defaultAccount.trim();
@@ -34,7 +34,7 @@ export function resolveDefaultGoogleChatAccountId(cfg: OpenClawConfig): string {
 }
 
 function resolveAccountConfig(
-  cfg: OpenClawConfig,
+  cfg: MaistroConfig,
   accountId: string,
 ): GoogleChatAccountConfig | undefined {
   const accounts = cfg.channels?.["googlechat"]?.accounts;
@@ -45,7 +45,7 @@ function resolveAccountConfig(
 }
 
 function mergeGoogleChatAccountConfig(
-  cfg: OpenClawConfig,
+  cfg: MaistroConfig,
   accountId: string,
 ): GoogleChatAccountConfig {
   const raw = cfg.channels?.["googlechat"] ?? {};
@@ -107,7 +107,7 @@ function resolveCredentialsFromConfig(params: {
 }
 
 export function resolveGoogleChatAccount(params: {
-  cfg: OpenClawConfig;
+  cfg: MaistroConfig;
   accountId?: string | null;
 }): ResolvedGoogleChatAccount {
   const accountId = normalizeAccountId(params.accountId);
@@ -128,7 +128,7 @@ export function resolveGoogleChatAccount(params: {
   };
 }
 
-export function listEnabledGoogleChatAccounts(cfg: OpenClawConfig): ResolvedGoogleChatAccount[] {
+export function listEnabledGoogleChatAccounts(cfg: MaistroConfig): ResolvedGoogleChatAccount[] {
   return listGoogleChatAccountIds(cfg)
     .map((accountId) => resolveGoogleChatAccount({ cfg, accountId }))
     .filter((account) => account.enabled);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { OpenClawConfig } from "../../config/config.js";
+import type { MaistroConfig } from "../../config/config.js";
 
 vi.mock("../../config/sessions.js", () => ({
   loadSessionStore: vi.fn(),
@@ -26,7 +26,7 @@ describe("resolveCronSession", () => {
     vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: true });
 
     const result = resolveCronSession({
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       sessionKey: "agent:main:cron:test-job",
       agentId: "main",
       nowMs: Date.now(),
@@ -50,7 +50,7 @@ describe("resolveCronSession", () => {
     vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: true });
 
     const result = resolveCronSession({
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       sessionKey: "agent:main:cron:test-job",
       agentId: "main",
       nowMs: Date.now(),
@@ -64,7 +64,7 @@ describe("resolveCronSession", () => {
     vi.mocked(loadSessionStore).mockReturnValue({});
 
     const result = resolveCronSession({
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       sessionKey: "agent:main:cron:new-job",
       agentId: "main",
       nowMs: Date.now(),
@@ -89,7 +89,7 @@ describe("resolveCronSession", () => {
       vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: true });
 
       const result = resolveCronSession({
-        cfg: {} as OpenClawConfig,
+        cfg: {} as MaistroConfig,
         sessionKey: "webhook:stable-key",
         agentId: "main",
         nowMs: Date.now(),
@@ -111,7 +111,7 @@ describe("resolveCronSession", () => {
       vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: false });
 
       const result = resolveCronSession({
-        cfg: {} as OpenClawConfig,
+        cfg: {} as MaistroConfig,
         sessionKey: "webhook:stable-key",
         agentId: "main",
         nowMs: Date.now(),
@@ -133,7 +133,7 @@ describe("resolveCronSession", () => {
       vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: true });
 
       const result = resolveCronSession({
-        cfg: {} as OpenClawConfig,
+        cfg: {} as MaistroConfig,
         sessionKey: "webhook:stable-key",
         agentId: "main",
         nowMs: Date.now(),
@@ -155,7 +155,7 @@ describe("resolveCronSession", () => {
       vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: true });
 
       const result = resolveCronSession({
-        cfg: {} as OpenClawConfig,
+        cfg: {} as MaistroConfig,
         sessionKey: "webhook:stable-key",
         agentId: "main",
         nowMs: Date.now(),

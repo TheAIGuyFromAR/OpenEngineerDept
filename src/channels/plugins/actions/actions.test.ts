@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OpenClawConfig } from "../../../config/config.js";
+import type { MaistroConfig } from "../../../config/config.js";
 
 const handleDiscordAction = vi.fn(async (..._args: unknown[]) => ({ details: { ok: true } }));
 const handleTelegramAction = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
@@ -36,7 +36,7 @@ beforeEach(() => {
 
 describe("discord message actions", () => {
   it("lists channel and upload actions by default", async () => {
-    const cfg = { channels: { discord: { token: "d0" } } } as OpenClawConfig;
+    const cfg = { channels: { discord: { token: "d0" } } } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("emoji-upload");
@@ -47,7 +47,7 @@ describe("discord message actions", () => {
   it("respects disabled channel actions", async () => {
     const cfg = {
       channels: { discord: { token: "d0", actions: { channels: false } } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).not.toContain("channel-create");
@@ -62,7 +62,7 @@ describe("discord message actions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("timeout");
@@ -80,7 +80,7 @@ describe("discord message actions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("timeout");
@@ -98,7 +98,7 @@ describe("discord message actions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     // moderation defaults to false, so without explicit true it stays hidden
@@ -117,7 +117,7 @@ describe("discord message actions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("timeout");
@@ -134,7 +134,7 @@ describe("discord message actions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = discordMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("timeout");
@@ -144,7 +144,7 @@ describe("discord message actions", () => {
 
 describe("telegram message actions", () => {
   it("lists poll action when telegram is configured", () => {
-    const cfg = { channels: { telegram: { botToken: "t0" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "t0" } } } as MaistroConfig;
     const actions = telegramMessageActions.listActions?.({ cfg }) ?? [];
     expect(actions).toContain("poll");
   });
@@ -160,7 +160,7 @@ describe("telegram message actions", () => {
         pollMulti: true,
         pollDurationSeconds: 60,
       },
-      cfg: { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig,
+      cfg: { channels: { telegram: { botToken: "tok" } } } as MaistroConfig,
       accountId: "ops",
     });
 
@@ -187,7 +187,7 @@ describe("handleDiscordMessageAction", () => {
         to: "channel:123",
         message: "hi",
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       accountId: "ops",
     });
 
@@ -212,7 +212,7 @@ describe("handleDiscordMessageAction", () => {
         message: "hi",
         embeds,
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
     });
 
     expect(handleDiscordAction).toHaveBeenCalledWith(
@@ -235,7 +235,7 @@ describe("handleDiscordMessageAction", () => {
         pollOption: ["Yes", "No"],
         accountId: "marve",
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
     });
 
     expect(handleDiscordAction).toHaveBeenCalledWith(
@@ -257,7 +257,7 @@ describe("handleDiscordMessageAction", () => {
         channelId: "123",
         message: "hi",
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       accountId: "ops",
     });
 
@@ -282,7 +282,7 @@ describe("handleDiscordMessageAction", () => {
         channelId: "123",
         message: "hi",
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
       accountId: "ops",
     });
 
@@ -305,7 +305,7 @@ describe("handleDiscordMessageAction", () => {
         threadName: "Forum thread",
         message: "Initial forum post body",
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
     });
 
     expect(handleDiscordAction).toHaveBeenCalledWith(
@@ -328,7 +328,7 @@ describe("handleDiscordMessageAction", () => {
         locked: false,
         autoArchiveDuration: 1440,
       },
-      cfg: {} as OpenClawConfig,
+      cfg: {} as MaistroConfig,
     });
 
     expect(handleDiscordAction).toHaveBeenCalledWith(
@@ -346,14 +346,14 @@ describe("handleDiscordMessageAction", () => {
 
 describe("telegramMessageActions", () => {
   it("excludes sticker actions when not enabled", () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
     const actions = telegramMessageActions.listActions?.({ cfg }) ?? [];
     expect(actions).not.toContain("sticker");
     expect(actions).not.toContain("sticker-search");
   });
 
   it("allows media-only sends and passes asVoice", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await telegramMessageActions.handleAction?.({
       channel: "telegram",
@@ -380,7 +380,7 @@ describe("telegramMessageActions", () => {
   });
 
   it("passes silent flag for silent sends", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await telegramMessageActions.handleAction?.({
       channel: "telegram",
@@ -406,7 +406,7 @@ describe("telegramMessageActions", () => {
   });
 
   it("maps edit action params into editMessage", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await telegramMessageActions.handleAction?.({
       channel: "telegram",
@@ -435,7 +435,7 @@ describe("telegramMessageActions", () => {
   });
 
   it("rejects non-integer messageId for edit before reaching telegram-actions", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await expect(
       telegramMessageActions.handleAction({
@@ -463,7 +463,7 @@ describe("telegramMessageActions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = telegramMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("sticker");
@@ -480,7 +480,7 @@ describe("telegramMessageActions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = telegramMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).not.toContain("sticker");
@@ -497,7 +497,7 @@ describe("telegramMessageActions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     const actions = telegramMessageActions.listActions?.({ cfg }) ?? [];
 
     expect(actions).toContain("sticker");
@@ -506,7 +506,7 @@ describe("telegramMessageActions", () => {
   });
 
   it("accepts numeric messageId and channelId for reactions", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await telegramMessageActions.handleAction?.({
       channel: "telegram",
@@ -533,7 +533,7 @@ describe("telegramMessageActions", () => {
   });
 
   it("routes poll action to sendPoll with question and options", async () => {
-    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as MaistroConfig;
 
     await telegramMessageActions.handleAction?.({
       channel: "telegram",
@@ -561,14 +561,14 @@ describe("telegramMessageActions", () => {
 
 describe("signalMessageActions", () => {
   it("returns no actions when no configured accounts exist", () => {
-    const cfg = {} as OpenClawConfig;
+    const cfg = {} as MaistroConfig;
     expect(signalMessageActions.listActions?.({ cfg }) ?? []).toEqual([]);
   });
 
   it("hides react when reactions are disabled", () => {
     const cfg = {
       channels: { signal: { account: "+15550001111", actions: { reactions: false } } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     expect(signalMessageActions.listActions?.({ cfg }) ?? []).toEqual(["send"]);
   });
 
@@ -582,7 +582,7 @@ describe("signalMessageActions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
     expect(signalMessageActions.listActions?.({ cfg }) ?? []).toEqual(["send", "react"]);
   });
 
@@ -594,7 +594,7 @@ describe("signalMessageActions", () => {
   it("blocks reactions when action gate is disabled", async () => {
     const cfg = {
       channels: { signal: { account: "+15550001111", actions: { reactions: false } } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
 
     await expect(
       signalMessageActions.handleAction({
@@ -617,7 +617,7 @@ describe("signalMessageActions", () => {
           },
         },
       },
-    } as OpenClawConfig;
+    } as MaistroConfig;
 
     await signalMessageActions.handleAction?.({
       channel: "signal",
@@ -635,7 +635,7 @@ describe("signalMessageActions", () => {
   it("normalizes uuid recipients", async () => {
     const cfg = {
       channels: { signal: { account: "+15550001111" } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
 
     await signalMessageActions.handleAction?.({
       channel: "signal",
@@ -660,7 +660,7 @@ describe("signalMessageActions", () => {
   it("requires targetAuthor for group reactions", async () => {
     const cfg = {
       channels: { signal: { account: "+15550001111" } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
 
     await expect(
       signalMessageActions.handleAction({
@@ -676,7 +676,7 @@ describe("signalMessageActions", () => {
   it("passes groupId and targetAuthor for group reactions", async () => {
     const cfg = {
       channels: { signal: { account: "+15550001111" } },
-    } as OpenClawConfig;
+    } as MaistroConfig;
 
     await signalMessageActions.handleAction?.({
       channel: "signal",
@@ -702,7 +702,7 @@ describe("signalMessageActions", () => {
 
 describe("slack actions adapter", () => {
   it("forwards threadId for read", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -724,7 +724,7 @@ describe("slack actions adapter", () => {
   });
 
   it("forwards normalized limit for emoji-list", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -744,7 +744,7 @@ describe("slack actions adapter", () => {
   });
 
   it("forwards blocks JSON for send", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -768,7 +768,7 @@ describe("slack actions adapter", () => {
   });
 
   it("forwards blocks arrays for send", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -792,7 +792,7 @@ describe("slack actions adapter", () => {
   });
 
   it("rejects invalid blocks JSON for send", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await expect(
@@ -811,7 +811,7 @@ describe("slack actions adapter", () => {
   });
 
   it("rejects empty blocks arrays for send", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await expect(
@@ -830,7 +830,7 @@ describe("slack actions adapter", () => {
   });
 
   it("rejects send when both blocks and media are provided", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await expect(
@@ -850,7 +850,7 @@ describe("slack actions adapter", () => {
   });
 
   it("forwards blocks JSON for edit", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -876,7 +876,7 @@ describe("slack actions adapter", () => {
   });
 
   it("forwards blocks arrays for edit", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await actions.handleAction?.({
@@ -902,7 +902,7 @@ describe("slack actions adapter", () => {
   });
 
   it("rejects edit when both message and blocks are missing", async () => {
-    const cfg = { channels: { slack: { botToken: "tok" } } } as OpenClawConfig;
+    const cfg = { channels: { slack: { botToken: "tok" } } } as MaistroConfig;
     const actions = createSlackActions("slack");
 
     await expect(

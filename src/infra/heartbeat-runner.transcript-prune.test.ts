@@ -3,7 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramPlugin } from "../../extensions/telegram/src/channel.js";
 import { setTelegramRuntime } from "../../extensions/telegram/src/runtime.js";
-import type { OpenClawConfig } from "../config/config.js";
+import type { MaistroConfig } from "../config/config.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
@@ -45,7 +45,7 @@ describe("heartbeat transcript pruning", () => {
     }) => Promise<T>,
   ) {
     return withTempHeartbeatSandbox(fn, {
-      prefix: "openclaw-hb-prune-",
+      prefix: "maistro-hb-prune-",
       unsetEnvVars: ["TELEGRAM_BOT_TOKEN"],
     });
   }
@@ -75,7 +75,7 @@ describe("heartbeat transcript pruning", () => {
       });
 
       // Run heartbeat
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         version: 1,
         model: "test-model",
         agent: { workspace: tmpDir },
@@ -123,7 +123,7 @@ describe("heartbeat transcript pruning", () => {
       });
 
       // Run heartbeat
-      const cfg: OpenClawConfig = {
+      const cfg: MaistroConfig = {
         version: 1,
         model: "test-model",
         agent: { workspace: tmpDir },

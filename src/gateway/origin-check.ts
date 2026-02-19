@@ -1,6 +1,24 @@
+import { domainToASCII } from "node:url";
 import { isLoopbackHost, normalizeHostHeader, resolveHostName } from "./net.js";
 
 type OriginCheckResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Normalize a hostname to its ASCII/punycode form to prevent IDN homoglyph
+ * bypass attacks (e.g. Cyrillic 'а' in place of Latin 'a').
+ * Returns the lowercased punycode hostname, or the original lowercased input
+ * if conversion fails (e.g. already ASCII or invalid).
+ */
+function normalizeHostnameToASCII(hostname: string): string {
+  const lower = hostname.toLowerCase();
+  try {
+    const ascii = domainToASCII(lower);
+    // domainToASCII returns empty string on failure
+    return ascii || lower;
+  } catch {
+    return lower;
+  }
+}
 
 function parseOrigin(
   originRaw?: string,
@@ -11,10 +29,13 @@ function parseOrigin(
   }
   try {
     const url = new URL(trimmed);
+    // Normalize hostname through punycode to prevent IDN homoglyph attacks
+    const normalizedHostname = normalizeHostnameToASCII(url.hostname);
+    const port = url.port ? `:${url.port}` : "";
     return {
-      origin: url.origin.toLowerCase(),
-      host: url.host.toLowerCase(),
-      hostname: url.hostname.toLowerCase(),
+      origin: `${url.protocol}//${normalizedHostname}${port}`.toLowerCase(),
+      host: `${normalizedHostname}${port}`.toLowerCase(),
+      hostname: normalizedHostname,
     };
   } catch {
     return null;
@@ -31,8 +52,20 @@ export function checkBrowserOrigin(params: {
     return { ok: false, reason: "origin missing or invalid" };
   }
 
+  // Normalize allowlist entries through punycode as well for consistent comparison
   const allowlist = (params.allowedOrigins ?? [])
-    .map((value) => value.trim().toLowerCase())
+    .map((value) => {
+      const trimmed = value.trim().toLowerCase();
+      // If it looks like an origin (has protocol), parse and normalize it
+      try {
+        const url = new URL(trimmed);
+        const normalizedHost = normalizeHostnameToASCII(url.hostname);
+        const port = url.port ? `:${url.port}` : "";
+        return `${url.protocol}//${normalizedHost}${port}`;
+      } catch {
+        return trimmed;
+      }
+    })
     .filter(Boolean);
   if (allowlist.includes(parsedOrigin.origin)) {
     return { ok: true };

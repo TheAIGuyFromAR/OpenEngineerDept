@@ -10,10 +10,10 @@ RUN corepack enable
 
 WORKDIR /app
 
-ARG OPENCLAW_DOCKER_APT_PACKAGES=""
-RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
+ARG MAISTRO_DOCKER_APT_PACKAGES=""
+RUN if [ -n "$MAISTRO_DOCKER_APT_PACKAGES" ]; then \
       apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $MAISTRO_DOCKER_APT_PACKAGES && \
       apt-get clean && \
       rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     fi
@@ -26,11 +26,11 @@ COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
 
 # Optionally install Chromium and Xvfb for browser automation.
-# Build with: docker build --build-arg OPENCLAW_INSTALL_BROWSER=1 ...
+# Build with: docker build --build-arg MAISTRO_INSTALL_BROWSER=1 ...
 # Adds ~300MB but eliminates the 60-90s Playwright install on every container start.
 # Must run after pnpm install so playwright-core is available in node_modules.
-ARG OPENCLAW_INSTALL_BROWSER=""
-RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
+ARG MAISTRO_INSTALL_BROWSER=""
+RUN if [ -n "$MAISTRO_INSTALL_BROWSER" ]; then \
       apt-get update && \
       DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb && \
       node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
@@ -41,7 +41,7 @@ RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
 COPY . .
 RUN pnpm build
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
-ENV OPENCLAW_PREFER_PNPM=1
+ENV MAISTRO_PREFER_PNPM=1
 RUN pnpm ui:build
 
 ENV NODE_ENV=production
@@ -62,4 +62,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Binds to loopback (127.0.0.1) by default for security.
 # NOTE: --allow-unconfigured is for initial setup only. Production deployments
 # MUST configure gateway.auth.token or gateway.auth.password before exposing.
-CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+CMD ["node", "maistro.mjs", "gateway", "--allow-unconfigured"]

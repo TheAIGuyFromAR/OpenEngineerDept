@@ -41,9 +41,9 @@ export async function prepareRestartScript(
 
   try {
     if (platform === "linux") {
-      const serviceName = resolveGatewaySystemdServiceName(env.OPENCLAW_PROFILE);
+      const serviceName = resolveGatewaySystemdServiceName(env.MAISTRO_PROFILE);
       const escaped = shellEscape(`${serviceName}.service`);
-      filename = `openclaw-restart-${timestamp}.sh`;
+      filename = `maistro-restart-${timestamp}.sh`;
       scriptContent = `#!/bin/sh
 # Standalone restart script — survives parent process termination.
 # Wait briefly to ensure file locks are released after update.
@@ -53,11 +53,11 @@ systemctl --user restart '${escaped}'
 rm -f "$0"
 `;
     } else if (platform === "darwin") {
-      const label = resolveGatewayLaunchAgentLabel(env.OPENCLAW_PROFILE);
+      const label = resolveGatewayLaunchAgentLabel(env.MAISTRO_PROFILE);
       const escaped = shellEscape(label);
       // Fallback to 501 if getuid is not available (though it should be on macOS)
       const uid = process.getuid ? process.getuid() : 501;
-      filename = `openclaw-restart-${timestamp}.sh`;
+      filename = `maistro-restart-${timestamp}.sh`;
       scriptContent = `#!/bin/sh
 # Standalone restart script — survives parent process termination.
 # Wait briefly to ensure file locks are released after update.
@@ -67,11 +67,11 @@ launchctl kickstart -k 'gui/${uid}/${escaped}'
 rm -f "$0"
 `;
     } else if (platform === "win32") {
-      const taskName = resolveGatewayWindowsTaskName(env.OPENCLAW_PROFILE);
+      const taskName = resolveGatewayWindowsTaskName(env.MAISTRO_PROFILE);
       if (!isBatchSafe(taskName)) {
         return null;
       }
-      filename = `openclaw-restart-${timestamp}.bat`;
+      filename = `maistro-restart-${timestamp}.bat`;
       scriptContent = `@echo off
 REM Standalone restart script — survives parent process termination.
 REM Wait briefly to ensure file locks are released after update.

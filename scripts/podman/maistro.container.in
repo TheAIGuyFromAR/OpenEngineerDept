@@ -1,0 +1,26 @@
+# Maistro gateway — Podman Quadlet (rootless)
+# Installed by setup-podman.sh into maistro's ~/.config/containers/systemd/
+# {{MAISTRO_HOME}} is replaced at install time.
+
+[Unit]
+Description=Maistro gateway (rootless Podman)
+
+[Container]
+Image=maistro:local
+ContainerName=maistro
+UserNS=keep-id
+Volume={{MAISTRO_HOME}}/.maistro:/home/node/.maistro
+EnvironmentFile={{MAISTRO_HOME}}/.maistro/.env
+Environment=HOME=/home/node
+Environment=TERM=xterm-256color
+PublishPort=18789:18789
+PublishPort=18790:18790
+Pull=never
+Exec=node dist/index.js gateway --bind lan --port 18789
+
+[Service]
+TimeoutStartSec=300
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

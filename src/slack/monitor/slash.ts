@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs } from "@slack/bolt";
 import type { ChatCommandDefinition, CommandArgs } from "../../auto-reply/commands-registry.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
@@ -27,14 +28,14 @@ import { resolveSlackRoomContextHints } from "./room-context.js";
 
 type SlackBlock = { type: string; [key: string]: unknown };
 
-const SLACK_COMMAND_ARG_ACTION_ID = "openclaw_cmdarg";
+const SLACK_COMMAND_ARG_ACTION_ID = "maistro_cmdarg";
 const SLACK_COMMAND_ARG_VALUE_PREFIX = "cmdarg";
 const SLACK_COMMAND_ARG_BUTTON_ROW_SIZE = 5;
 const SLACK_COMMAND_ARG_OVERFLOW_MIN = 3;
 const SLACK_COMMAND_ARG_OVERFLOW_MAX = 5;
 const SLACK_COMMAND_ARG_SELECT_OPTIONS_MAX = 100;
 const SLACK_COMMAND_ARG_SELECT_OPTION_VALUE_MAX = 75;
-const SLACK_COMMAND_ARG_EXTERNAL_PREFIX = "openclaw_cmdarg_ext:";
+const SLACK_COMMAND_ARG_EXTERNAL_PREFIX = "maistro_cmdarg_ext:";
 const SLACK_COMMAND_ARG_EXTERNAL_TTL_MS = 10 * 60 * 1000;
 const SLACK_HEADER_TEXT_MAX = 150;
 
@@ -91,7 +92,7 @@ function storeSlackExternalArgMenu(params: {
   userId: string;
 }): string {
   pruneSlackExternalArgMenuStore();
-  const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const token = `${Date.now().toString(36)}${randomBytes(6).toString("hex")}`;
   slackExternalArgMenuStore.set(token, {
     choices: params.choices,
     userId: params.userId,

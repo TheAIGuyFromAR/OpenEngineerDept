@@ -1,6 +1,6 @@
-import type { OpenClawConfig } from "./config.js";
+import type { MaistroConfig } from "./config.js";
 
-export function ensurePluginAllowlisted(cfg: OpenClawConfig, pluginId: string): OpenClawConfig {
+export function ensurePluginAllowlisted(cfg: MaistroConfig, pluginId: string): MaistroConfig {
   const allow = cfg.plugins?.allow;
   if (!Array.isArray(allow) || allow.includes(pluginId)) {
     return cfg;

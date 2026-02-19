@@ -51,8 +51,8 @@ function initSelfPresence() {
   const host = os.hostname();
   const ip = resolvePrimaryIPv4() ?? undefined;
   const version =
-    process.env.OPENCLAW_VERSION ??
-    process.env.OPENCLAW_SERVICE_VERSION ??
+    process.env.MAISTRO_VERSION ??
+    process.env.MAISTRO_SERVICE_VERSION ??
     process.env.npm_package_version ??
     "unknown";
   const modelIdentifier = (() => {

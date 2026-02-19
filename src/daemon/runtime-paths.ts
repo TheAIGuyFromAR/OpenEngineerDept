@@ -158,7 +158,7 @@ export async function resolvePreferredNodePath(params: {
     return undefined;
   }
 
-  // Prefer the node that is currently running `openclaw gateway install`.
+  // Prefer the node that is currently running `maistro gateway install`.
   // This respects the user's active version manager (fnm/nvm/volta/etc.).
   const currentExecPath = params.execPath ?? process.execPath;
   if (currentExecPath) {

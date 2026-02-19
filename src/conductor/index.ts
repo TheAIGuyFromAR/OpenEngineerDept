@@ -5,7 +5,7 @@
  * and input adapters into a running system.
  *
  * This module is the top-level API for the Conductor architecture.
- * It can be used standalone or integrated into the existing OpenClaw
+ * It can be used standalone or integrated into the existing Maistro
  * gateway infrastructure.
  */
 

@@ -1,9 +1,9 @@
 import type {
-  OpenClawConfig,
+  MaistroConfig,
   PluginRuntime,
   ResolvedLineAccount,
   RuntimeEnv,
-} from "openclaw/plugin-sdk";
+} from "maistro/plugin-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { linePlugin } from "./channel.js";
 import { setLineRuntime } from "./runtime.js";
@@ -18,7 +18,7 @@ type LineRuntimeMocks = {
 function createRuntime(): { runtime: PluginRuntime; mocks: LineRuntimeMocks } {
   const writeConfigFile = vi.fn(async () => {});
   const resolveLineAccount = vi.fn(
-    ({ cfg, accountId }: { cfg: OpenClawConfig; accountId?: string }) => {
+    ({ cfg, accountId }: { cfg: MaistroConfig; accountId?: string }) => {
       const lineConfig = (cfg.channels?.line ?? {}) as {
         tokenFile?: string;
         secretFile?: string;
@@ -56,7 +56,7 @@ describe("linePlugin gateway.logoutAccount", () => {
     const { runtime, mocks } = createRuntime();
     setLineRuntime(runtime);
 
-    const cfg: OpenClawConfig = {
+    const cfg: MaistroConfig = {
       channels: {
         line: {
           tokenFile: "/tmp/token",
@@ -72,7 +72,7 @@ describe("linePlugin gateway.logoutAccount", () => {
       }),
     };
     const resolveAccount = mocks.resolveLineAccount as unknown as (params: {
-      cfg: OpenClawConfig;
+      cfg: MaistroConfig;
       accountId?: string;
     }) => ResolvedLineAccount;
     const account = resolveAccount({
@@ -96,7 +96,7 @@ describe("linePlugin gateway.logoutAccount", () => {
     const { runtime, mocks } = createRuntime();
     setLineRuntime(runtime);
 
-    const cfg: OpenClawConfig = {
+    const cfg: MaistroConfig = {
       channels: {
         line: {
           accounts: {
@@ -116,7 +116,7 @@ describe("linePlugin gateway.logoutAccount", () => {
       }),
     };
     const resolveAccount = mocks.resolveLineAccount as unknown as (params: {
-      cfg: OpenClawConfig;
+      cfg: MaistroConfig;
       accountId?: string;
     }) => ResolvedLineAccount;
     const account = resolveAccount({

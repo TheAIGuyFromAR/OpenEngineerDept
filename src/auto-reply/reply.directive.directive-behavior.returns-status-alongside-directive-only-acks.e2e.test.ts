@@ -22,7 +22,7 @@ describe("directive behavior", () => {
       agents: {
         defaults: {
           model: "anthropic/claude-opus-4-5",
-          workspace: path.join(home, "openclaw"),
+          workspace: path.join(home, "maistro"),
         },
       },
       channels: { whatsapp: { allowFrom: ["*"] } },
@@ -56,7 +56,7 @@ describe("directive behavior", () => {
           agents: {
             defaults: {
               model: { primary: "anthropic/claude-opus-4-5" },
-              workspace: path.join(home, "openclaw"),
+              workspace: path.join(home, "maistro"),
             },
           },
           tools: {

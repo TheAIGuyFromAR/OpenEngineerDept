@@ -1,16 +1,16 @@
 {
-  "name": "clawdbot",
+  "name": "maistro",
   "version": "2026.2.12",
-  "description": "Compatibility shim that forwards to openclaw",
+  "description": "Compatibility shim that forwards to maistro",
   "bin": {
-    "clawdbot": "./bin/clawdbot.js"
+    "maistro": "./bin/maistro.js"
   },
   "type": "module",
   "exports": {
     ".": "./index.js",
-    "./cli-entry": "./bin/clawdbot.js"
+    "./cli-entry": "./bin/maistro.js"
   },
   "dependencies": {
-    "openclaw": "workspace:*"
+    "maistro": "workspace:*"
   }
 }

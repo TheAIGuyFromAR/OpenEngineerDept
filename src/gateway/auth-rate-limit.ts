@@ -16,6 +16,7 @@
  *   {@link createAuthRateLimiter} and pass it where needed.
  */
 
+import { secureId } from "../utils/secure-random.js";
 import { isLoopbackAddress } from "./net.js";
 
 // ---------------------------------------------------------------------------
@@ -106,7 +107,7 @@ export function createAuthRateLimiter(config?: RateLimitConfig): AuthRateLimiter
       // Requests with no identifiable IP are assigned unique keys so they
       // cannot share a single "unknown" bucket (which would allow attackers
       // to evade per-IP rate limits by omitting the IP).
-      return `unknown-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      return `unknown-${Date.now()}-${secureId(4)}`;
     }
     return trimmed;
   }

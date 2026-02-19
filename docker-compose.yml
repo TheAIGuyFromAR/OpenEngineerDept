@@ -1,18 +1,18 @@
 services:
-  openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-openclaw:local}
+  maistro-gateway:
+    image: ${MAISTRO_IMAGE:-maistro:local}
     environment:
       HOME: /home/node
       TERM: xterm-256color
       # Auth token — prefer Docker secrets for production deployments.
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      MAISTRO_GATEWAY_TOKEN: ${MAISTRO_GATEWAY_TOKEN}
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace:ro
+      - ${MAISTRO_CONFIG_DIR}:/home/node/.maistro
+      - ${MAISTRO_WORKSPACE_DIR}:/home/node/.maistro/workspace:ro
     ports:
       # Bind to loopback by default — expose externally only via reverse proxy.
-      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "127.0.0.1:${MAISTRO_GATEWAY_PORT:-18789}:18789"
+      - "127.0.0.1:${MAISTRO_BRIDGE_PORT:-18790}:18790"
     init: true
     restart: unless-stopped
     # Container hardening
@@ -29,21 +29,21 @@ services:
         "dist/index.js",
         "gateway",
         "--bind",
-        "${OPENCLAW_GATEWAY_BIND:-loopback}",
+        "${MAISTRO_GATEWAY_BIND:-loopback}",
         "--port",
         "18789",
       ]
 
-  openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-openclaw:local}
+  maistro-cli:
+    image: ${MAISTRO_IMAGE:-maistro:local}
     environment:
       HOME: /home/node
       TERM: xterm-256color
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      MAISTRO_GATEWAY_TOKEN: ${MAISTRO_GATEWAY_TOKEN}
       BROWSER: echo
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ${MAISTRO_CONFIG_DIR}:/home/node/.maistro
+      - ${MAISTRO_WORKSPACE_DIR}:/home/node/.maistro/workspace
     stdin_open: true
     tty: true
     init: true

@@ -15,7 +15,7 @@ vi.mock("../process/exec.js", () => ({
 const tempDirs: string[] = [];
 
 function makeTempDir() {
-  const dir = path.join(os.tmpdir(), `openclaw-plugin-install-${randomUUID()}`);
+  const dir = path.join(os.tmpdir(), `maistro-plugin-install-${randomUUID()}`);
   fs.mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
   return dir;
@@ -56,7 +56,7 @@ function writePluginPackage(params: {
       {
         name: params.name,
         version: params.version,
-        openclaw: { extensions: params.extensions },
+        maistro: { extensions: params.extensions },
       },
       null,
       2,
@@ -74,7 +74,7 @@ async function createVoiceCallArchive(params: {
   const pkgDir = path.join(params.workDir, "package");
   writePluginPackage({
     pkgDir,
-    name: "@openclaw/voice-call",
+    name: "@maistro/voice-call",
     version: params.version,
     extensions: ["./dist/index.js"],
   });
@@ -122,7 +122,7 @@ async function expectArchiveInstallReservedSegmentRejection(params: {
     JSON.stringify({
       name: params.packageName,
       version: "0.0.1",
-      openclaw: { extensions: ["./dist/index.js"] },
+      maistro: { extensions: ["./dist/index.js"] },
     }),
     "utf-8",
   );
@@ -163,7 +163,7 @@ beforeEach(() => {
 });
 
 describe("installPluginFromArchive", () => {
-  it("installs into ~/.openclaw/extensions and uses unscoped id", async () => {
+  it("installs into ~/.maistro/extensions and uses unscoped id", async () => {
     const stateDir = makeTempDir();
     const workDir = makeTempDir();
     const { archivePath } = await createVoiceCallArchive({
@@ -225,9 +225,9 @@ describe("installPluginFromArchive", () => {
     zip.file(
       "package/package.json",
       JSON.stringify({
-        name: "@openclaw/zipper",
+        name: "@maistro/zipper",
         version: "0.0.1",
-        openclaw: { extensions: ["./dist/index.js"] },
+        maistro: { extensions: ["./dist/index.js"] },
       }),
     );
     zip.file("package/dist/index.js", "export {};");
@@ -302,14 +302,14 @@ describe("installPluginFromArchive", () => {
     });
   });
 
-  it("rejects packages without openclaw.extensions", async () => {
+  it("rejects packages without maistro.extensions", async () => {
     const stateDir = makeTempDir();
     const workDir = makeTempDir();
     const pkgDir = path.join(workDir, "package");
     fs.mkdirSync(pkgDir, { recursive: true });
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
-      JSON.stringify({ name: "@openclaw/nope", version: "0.0.1" }),
+      JSON.stringify({ name: "@maistro/nope", version: "0.0.1" }),
       "utf-8",
     );
 
@@ -329,7 +329,7 @@ describe("installPluginFromArchive", () => {
     if (result.ok) {
       return;
     }
-    expect(result.error).toContain("openclaw.extensions");
+    expect(result.error).toContain("maistro.extensions");
   });
 
   it("warns when plugin contains dangerous code patterns", async () => {
@@ -340,7 +340,7 @@ describe("installPluginFromArchive", () => {
       JSON.stringify({
         name: "dangerous-plugin",
         version: "1.0.0",
-        openclaw: { extensions: ["index.js"] },
+        maistro: { extensions: ["index.js"] },
       }),
     );
     fs.writeFileSync(
@@ -363,7 +363,7 @@ describe("installPluginFromArchive", () => {
       JSON.stringify({
         name: "hidden-entry-plugin",
         version: "1.0.0",
-        openclaw: { extensions: [".hidden/index.js"] },
+        maistro: { extensions: [".hidden/index.js"] },
       }),
     );
     fs.writeFileSync(
@@ -390,7 +390,7 @@ describe("installPluginFromArchive", () => {
       JSON.stringify({
         name: "scan-fail-plugin",
         version: "1.0.0",
-        openclaw: { extensions: ["index.js"] },
+        maistro: { extensions: ["index.js"] },
       }),
     );
     fs.writeFileSync(path.join(pluginDir, "index.js"), "export {};");
@@ -412,9 +412,9 @@ describe("installPluginFromDir", () => {
     fs.writeFileSync(
       path.join(pluginDir, "package.json"),
       JSON.stringify({
-        name: "@openclaw/test-plugin",
+        name: "@maistro/test-plugin",
         version: "0.0.1",
-        openclaw: { extensions: ["./dist/index.js"] },
+        maistro: { extensions: ["./dist/index.js"] },
         dependencies: { "left-pad": "1.3.0" },
       }),
       "utf-8",
@@ -450,9 +450,9 @@ describe("installPluginFromNpmSpec", () => {
     fs.writeFileSync(
       path.join(pkgDir, "package.json"),
       JSON.stringify({
-        name: "@openclaw/voice-call",
+        name: "@maistro/voice-call",
         version: "0.0.1",
-        openclaw: { extensions: ["./dist/index.js"] },
+        maistro: { extensions: ["./dist/index.js"] },
       }),
       "utf-8",
     );
@@ -477,7 +477,7 @@ describe("installPluginFromNpmSpec", () => {
 
     const { installPluginFromNpmSpec } = await import("./install.js");
     const result = await installPluginFromNpmSpec({
-      spec: "@openclaw/voice-call@0.0.1",
+      spec: "@maistro/voice-call@0.0.1",
       extensionsDir,
       logger: { info: () => {}, warn: () => {} },
     });
@@ -492,7 +492,7 @@ describe("installPluginFromNpmSpec", () => {
       throw new Error("expected npm pack call");
     }
     const [argv, options] = packCall;
-    expect(argv).toEqual(["npm", "pack", "@openclaw/voice-call@0.0.1", "--ignore-scripts"]);
+    expect(argv).toEqual(["npm", "pack", "@maistro/voice-call@0.0.1", "--ignore-scripts"]);
     expect(options?.env).toMatchObject({ NPM_CONFIG_IGNORE_SCRIPTS: "true" });
 
     expect(packTmpDir).not.toBe("");

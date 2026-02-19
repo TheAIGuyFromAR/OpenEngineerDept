@@ -12,7 +12,7 @@
 import crypto from "node:crypto";
 import type { HandoffMessage } from "../types.js";
 
-// Reuse the existing security infrastructure from the OpenClaw hardening
+// Reuse the existing security infrastructure from the Maistro hardening
 import { detectSuspiciousPatterns } from "../../security/external-content.js";
 
 /**

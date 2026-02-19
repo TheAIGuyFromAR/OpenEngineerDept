@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
-import type { OpenClawConfig } from "../config/config.js";
+import type { MaistroConfig } from "../config/config.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
 import { runHeartbeatOnce, type HeartbeatDeps } from "./heartbeat-runner.js";
 import { installHeartbeatRunnerTestRuntime } from "./heartbeat-runner.test-harness.js";
@@ -18,7 +18,7 @@ describe("resolveHeartbeatIntervalMs", () => {
     heartbeat: Record<string, unknown>;
     channels: Record<string, unknown>;
     messages?: Record<string, unknown>;
-  }): OpenClawConfig {
+  }): MaistroConfig {
     return {
       agents: {
         defaults: {
@@ -34,7 +34,7 @@ describe("resolveHeartbeatIntervalMs", () => {
 
   async function seedMainSession(
     storePath: string,
-    cfg: OpenClawConfig,
+    cfg: MaistroConfig,
     session: {
       sessionId?: string;
       updatedAt?: number;
@@ -217,7 +217,7 @@ describe("resolveHeartbeatIntervalMs", () => {
             heartbeat: { showOk: false },
           },
         },
-        messages: { responsePrefix: "[openclaw]" },
+        messages: { responsePrefix: "[maistro]" },
       });
 
       await seedMainSession(storePath, cfg, {
@@ -226,7 +226,7 @@ describe("resolveHeartbeatIntervalMs", () => {
         lastTo: "12345",
       });
 
-      replySpy.mockResolvedValue({ text: "[openclaw] HEARTBEAT_OK all good" });
+      replySpy.mockResolvedValue({ text: "[maistro] HEARTBEAT_OK all good" });
       const sendTelegram = vi.fn().mockResolvedValue({
         messageId: "m1",
         toJid: "jid",
