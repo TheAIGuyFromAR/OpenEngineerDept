@@ -869,7 +869,7 @@ GOLDEN_TASKS: list[GoldenTask] = [
                 "Nest is at 68 on auto mode. Override to 72 for tonight, let "
                 "the schedule pick back up in the morning. Tell Abra."
             )),
-            Phrasing(style=PhrasingStyle.SYMPTOM_ONLY, text="it's freezing in here"),
+            Phrasing(style=PhrasingStyle.SYMPTOM_ONLY, text="it's fucking hot in here!"),
             Phrasing(style=PhrasingStyle.EXACT_FIX, text="abra set thermostat target_temp=72 unit=fahrenheit"),
             Phrasing(style=PhrasingStyle.COPY_PASTE, text="Nest status: 68°F (auto) — override to 72°F hold"),
             Phrasing(style=PhrasingStyle.TICKET_STYLE, text="Action: Set temperature\nDevice: Thermostat\nTarget: 72°F"),
@@ -880,7 +880,7 @@ GOLDEN_TASKS: list[GoldenTask] = [
             Phrasing(style=PhrasingStyle.REFERENCE_ONLY, text="bump the nest up to 72"),
             Phrasing(style=PhrasingStyle.MULTI_TASK, text="set thermostat to 72 and turn on the ceiling fan to low"),
             Phrasing(style=PhrasingStyle.TYPOS_INFORMAL, text="too cold set thermo to 72 thx"),
-            Phrasing(style=PhrasingStyle.INDIRECT, text="the house is uncomfortable, needs to be warmer"),
+            Phrasing(style=PhrasingStyle.INDIRECT, text="I'm sweating, can you do something about it"),
             Phrasing(style=PhrasingStyle.ASSUMED_CONTEXT, text="same temp as last night, 72"),
         ],
     ),
