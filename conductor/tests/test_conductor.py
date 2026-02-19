@@ -180,6 +180,12 @@ def conductor(config):
     c._intent_router.route = AsyncMock(return_value=_make_routing())
     c._intent_router.close = AsyncMock()
 
+    # Mock Abra (home automation agent)
+    c._abra = MagicMock()
+    c._abra.handle = AsyncMock()
+    c._abra.execute = AsyncMock(return_value=[])
+    c._abra.close = AsyncMock()
+
     # Mock agents
     c._planner = MagicMock()
     c._planner.decompose = AsyncMock()
@@ -937,7 +943,17 @@ class TestIntentRouting:
         assert "clarification" in fail_args[0][1].lower() or "clarif" in fail_args[0][1].lower()
 
     async def test_home_automation_routed_to_abra(self, conductor):
-        """HOME_AUTOMATION intent → Abra stub, no planning."""
+        """HOME_AUTOMATION intent → Abra agent, no planning."""
+        from orchestrator.agents.abra import AbraResult, HAServiceCall
+
+        conductor._abra.handle = AsyncMock(return_value=AbraResult(
+            success=True,
+            service_calls=[HAServiceCall(domain="light", service="turn_off", entity_id="light.living_room")],
+            room_resolved="Living Room",
+            reasoning="Turning lights off",
+        ))
+        conductor._abra.execute = AsyncMock(return_value=[{"ok": True}])
+
         conductor._intent_router.route.return_value = _make_routing(
             intent=Intent.HOME_AUTOMATION, agent_name="abra", task_text="turn off lights"
         )
@@ -945,9 +961,8 @@ class TestIntentRouting:
         await conductor._process_task("task.md", "tell abra to turn off the lights")
 
         conductor._planner.decompose.assert_not_awaited()
-        conductor._watcher.write_failed.assert_awaited_once()
-        fail_args = conductor._watcher.write_failed.call_args
-        assert "abra" in fail_args[0][1].lower() or "automation" in fail_args[0][1].lower()
+        conductor._abra.handle.assert_awaited_once()
+        conductor._watcher.write_completed.assert_awaited_once()
 
     async def test_artifact_intent_routed(self, conductor):
         """ARTIFACT intent → artifact stub, no planning."""
@@ -1124,3 +1139,418 @@ class TestAnnotationScoring:
         assert "weak_output_content" in ann.tags
         assert len(ann.strengths) == 1
         assert len(ann.weaknesses) == 1
+
+
+# ------------------------------------------------------------------
+# Abra agent tests — room/device context + comfort interpretation
+# ------------------------------------------------------------------
+
+
+class TestAbraDeviceRegistry:
+    """Test DeviceRegistry room resolution and device lookup."""
+
+    def setup_method(self):
+        from orchestrator.agents.abra import DeviceRegistry
+        self.registry = DeviceRegistry.build_default()
+
+    def test_resolve_room_from_alexa_device(self):
+        """Echo device ID → correct room."""
+        room = self.registry.resolve_room("echo_living_room")
+        assert room is not None
+        assert room.area_id == "living_room"
+        assert room.name == "Living Room"
+
+    def test_resolve_bedroom(self):
+        room = self.registry.resolve_room("echo_bedroom")
+        assert room is not None
+        assert room.area_id == "bedroom"
+
+    def test_resolve_office(self):
+        room = self.registry.resolve_room("echo_office")
+        assert room is not None
+        assert room.area_id == "office"
+
+    def test_resolve_kitchen(self):
+        room = self.registry.resolve_room("echo_kitchen")
+        assert room is not None
+        assert room.area_id == "kitchen"
+
+    def test_unknown_device_returns_none(self):
+        room = self.registry.resolve_room("echo_garage")
+        assert room is None
+
+    def test_get_room_by_area_id(self):
+        room = self.registry.get_room("living_room")
+        assert room is not None
+        assert room.has_fan
+        assert room.has_climate
+
+    def test_bedroom_has_fan_no_climate(self):
+        room = self.registry.get_room("bedroom")
+        assert room is not None
+        assert room.has_fan
+        assert not room.has_climate
+
+    def test_find_devices_by_domain(self):
+        from orchestrator.agents.abra import DeviceDomain
+        fans = self.registry.find_devices("living_room", DeviceDomain.FAN)
+        assert len(fans) == 1
+        assert fans[0].entity_id == "fan.living_room"
+
+    def test_all_rooms_returns_four(self):
+        rooms = self.registry.all_rooms()
+        assert len(rooms) == 4
+        area_ids = {r.area_id for r in rooms}
+        assert area_ids == {"living_room", "bedroom", "office", "kitchen"}
+
+    def test_living_room_has_thermostat(self):
+        from orchestrator.agents.abra import DeviceDomain
+        climate = self.registry.find_devices("living_room", DeviceDomain.CLIMATE)
+        assert len(climate) == 1
+        assert climate[0].entity_id == "climate.main_thermostat"
+
+
+class TestAbraComfortInterpretation:
+    """Test interpret_comfort() — natural language → comfort intent."""
+
+    def test_hot_maps_to_cool_down(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, data = interpret_comfort("It's fucking hot in here!")
+        assert intent == ComfortIntent.COOL_DOWN
+
+    def test_sweating_maps_to_cool_down(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("I'm sweating like crazy")
+        assert intent == ComfortIntent.COOL_DOWN
+
+    def test_cold_maps_to_warm_up(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("It's freezing in here")
+        assert intent == ComfortIntent.WARM_UP
+
+    def test_fan_on(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("turn on the fan")
+        assert intent == ComfortIntent.FAN_ON
+
+    def test_fan_off(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("turn off the fan")
+        assert intent == ComfortIntent.FAN_OFF
+
+    def test_specific_temp_extracted(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, data = interpret_comfort("set it to 72 degrees")
+        assert intent == ComfortIntent.SPECIFIC_TEMP
+        assert data["target_temp"] == 72
+
+    def test_lights_off(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("kill the lights")
+        assert intent == ComfortIntent.LIGHTS_OFF
+
+    def test_lights_on(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("lights on")
+        assert intent == ComfortIntent.LIGHTS_ON
+
+    def test_too_bright_dims(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("it's too bright in here")
+        assert intent == ComfortIntent.LIGHTS_DIM
+
+    def test_stuffy_maps_to_cool_down(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("it's so stuffy in this room")
+        assert intent == ComfortIntent.COOL_DOWN
+
+    def test_warm_it_up(self):
+        from orchestrator.agents.abra import interpret_comfort, ComfortIntent
+        intent, _ = interpret_comfort("warm it up in here please")
+        assert intent == ComfortIntent.WARM_UP
+
+    def test_unrecognized_returns_none(self):
+        from orchestrator.agents.abra import interpret_comfort
+        intent, _ = interpret_comfort("what time is it")
+        assert intent is None
+
+
+class TestAbraHandle:
+    """Test Abra.handle() — full flow from utterance to service calls."""
+
+    async def test_hot_in_living_room_turns_on_fan(self):
+        """'It's hot' from living room Echo → turn on living room fan."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="It's fucking hot in here!",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        assert result.room_resolved == "Living Room"
+        # Should have fan turn_on as first call
+        fan_calls = [c for c in result.service_calls if c.domain == "fan"]
+        assert len(fan_calls) == 1
+        assert fan_calls[0].service == "turn_on"
+        assert fan_calls[0].entity_id == "fan.living_room"
+
+    async def test_hot_in_bedroom_turns_on_bedroom_fan(self):
+        """'It's hot' from bedroom → turn on bedroom fan (not living room!)."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="It's so hot",
+            source_device_id="echo_bedroom",
+        )
+
+        assert result.success
+        assert result.room_resolved == "Bedroom"
+        fan_calls = [c for c in result.service_calls if c.domain == "fan"]
+        assert len(fan_calls) == 1
+        assert fan_calls[0].entity_id == "fan.bedroom"
+
+    async def test_hot_also_checks_thermostat(self):
+        """Cool-down includes thermostat logic (fan + climate calls)."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="It's boiling in here",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        # Living room has both fan and thermostat
+        domains = {c.domain for c in result.service_calls}
+        assert "fan" in domains
+        assert "climate" in domains
+
+    async def test_cool_down_no_env_reader_sets_safe_default(self):
+        """Without env reader, thermostat gets a safe default setpoint."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="warm in here",
+            source_device_id="echo_living_room",
+        )
+
+        # No env reader → can't read HVAC state → climate call uses conservative logic
+        climate_calls = [c for c in result.service_calls if c.domain == "climate"]
+        assert len(climate_calls) >= 1
+
+    async def test_cool_down_heat_on_outdoor_warm_switches_to_ac(self):
+        """Heat running + outdoor temp >= 60°F → switch to AC."""
+        from orchestrator.agents.abra import (
+            Abra, DeviceRegistry, EnvironmentReader, EnvironmentState,
+        )
+
+        # Mock environment reader
+        env_reader = MagicMock(spec=EnvironmentReader)
+        env_reader.get_environment = AsyncMock(return_value=EnvironmentState(
+            outdoor_temp_f=65.0,
+            indoor_temp_f=78.0,
+            hvac_mode="heat",
+            hvac_action="heating",
+            current_setpoint_f=74.0,
+        ))
+        env_reader.close = AsyncMock()
+
+        abra = Abra(registry=DeviceRegistry.build_default(), env_reader=env_reader)
+
+        result = await abra.handle(
+            utterance="it's hot in here",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        # Should switch to cool mode
+        hvac_calls = [c for c in result.service_calls if c.domain == "climate"]
+        assert any(c.service == "set_hvac_mode" and c.data.get("hvac_mode") == "cool"
+                    for c in hvac_calls)
+        assert "AC" in result.reasoning or "cool" in result.reasoning.lower()
+
+    async def test_cool_down_heat_on_outdoor_cold_lowers_setpoint(self):
+        """Heat running + outdoor temp < 60°F → too cold for AC, lower setpoint."""
+        from orchestrator.agents.abra import (
+            Abra, DeviceRegistry, EnvironmentReader, EnvironmentState,
+        )
+
+        env_reader = MagicMock(spec=EnvironmentReader)
+        env_reader.get_environment = AsyncMock(return_value=EnvironmentState(
+            outdoor_temp_f=35.0,
+            indoor_temp_f=76.0,
+            hvac_mode="heat",
+            hvac_action="heating",
+            current_setpoint_f=74.0,
+        ))
+        env_reader.close = AsyncMock()
+
+        abra = Abra(registry=DeviceRegistry.build_default(), env_reader=env_reader)
+
+        result = await abra.handle(
+            utterance="it's hot",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        # Should lower setpoint, NOT switch to AC
+        hvac_calls = [c for c in result.service_calls if c.domain == "climate"]
+        set_temp_calls = [c for c in hvac_calls if c.service == "set_temperature"]
+        assert len(set_temp_calls) == 1
+        assert set_temp_calls[0].data["temperature"] == 72.0  # 74 - 2
+        assert "too cold for AC" in result.reasoning or "lowering setpoint" in result.reasoning
+
+    async def test_unknown_device_fails_gracefully(self):
+        """Unknown Alexa device → error, not crash."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="it's hot",
+            source_device_id="echo_garage",
+        )
+
+        assert not result.success
+        assert "Cannot determine room" in result.error
+
+    async def test_area_id_overrides_device_lookup(self):
+        """Explicit area_id bypasses Alexa device resolution."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="turn on the fan",
+            area_id="office",
+        )
+
+        assert result.success
+        assert result.room_resolved == "Office"
+        assert result.service_calls[0].entity_id == "fan.office"
+
+    async def test_set_specific_temp(self):
+        """'Set it to 68' → climate.set_temperature with 68."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="set it to 68 degrees",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        assert any(
+            c.service == "set_temperature" and c.data.get("temperature") == 68
+            for c in result.service_calls
+        )
+
+    async def test_cold_turns_off_fan_and_heats(self):
+        """'It's freezing' → turn off fan + adjust thermostat."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="it's freezing in here",
+            source_device_id="echo_living_room",
+        )
+
+        assert result.success
+        fan_calls = [c for c in result.service_calls if c.domain == "fan"]
+        assert fan_calls[0].service == "turn_off"
+        climate_calls = [c for c in result.service_calls if c.domain == "climate"]
+        assert len(climate_calls) >= 1
+
+    async def test_unrecognized_utterance_fails(self):
+        """Unrecognized intent → error, not crash."""
+        from orchestrator.agents.abra import Abra, DeviceRegistry
+        abra = Abra(registry=DeviceRegistry.build_default())
+
+        result = await abra.handle(
+            utterance="what's the weather like",
+            source_device_id="echo_living_room",
+        )
+
+        assert not result.success
+        assert "Could not interpret" in result.error
+
+
+class TestAbraServiceCallFormat:
+    """Test HAServiceCall serialization."""
+
+    def test_to_ha_payload(self):
+        from orchestrator.agents.abra import HAServiceCall
+        call = HAServiceCall(
+            domain="fan", service="turn_on", entity_id="fan.living_room",
+        )
+        payload = call.to_ha_payload()
+        assert payload == {"entity_id": "fan.living_room"}
+
+    def test_to_ha_payload_with_data(self):
+        from orchestrator.agents.abra import HAServiceCall
+        call = HAServiceCall(
+            domain="climate", service="set_temperature",
+            entity_id="climate.main_thermostat",
+            data={"temperature": 72, "hvac_mode": "cool"},
+        )
+        payload = call.to_ha_payload()
+        assert payload["entity_id"] == "climate.main_thermostat"
+        assert payload["temperature"] == 72
+        assert payload["hvac_mode"] == "cool"
+
+
+class TestAbraConductorIntegration:
+    """Test that the conductor routes HOME_AUTOMATION to Abra correctly."""
+
+    async def test_home_auto_routes_to_abra_handle(self, conductor):
+        """HOME_AUTOMATION → Abra.handle() called, not planner."""
+        from orchestrator.agents.abra import Abra, AbraResult, HAServiceCall
+
+        # Mock Abra on the conductor
+        conductor._abra = MagicMock(spec=Abra)
+        conductor._abra.handle = AsyncMock(return_value=AbraResult(
+            success=True,
+            service_calls=[
+                HAServiceCall(domain="fan", service="turn_on", entity_id="fan.living_room"),
+            ],
+            room_resolved="Living Room",
+            reasoning="Turning on fan for immediate relief",
+        ))
+        conductor._abra.execute = AsyncMock(return_value=[{"dry_run": True}])
+        conductor._abra.close = AsyncMock()
+
+        conductor._intent_router.route.return_value = _make_routing(
+            intent=Intent.HOME_AUTOMATION, agent_name="abra",
+            task_text="it's hot in here",
+        )
+
+        await conductor._process_task("task.md", "it's hot in here")
+
+        conductor._abra.handle.assert_awaited_once()
+        conductor._abra.execute.assert_awaited_once()
+        conductor._planner.decompose.assert_not_awaited()
+        conductor._watcher.write_completed.assert_awaited_once()
+
+    async def test_abra_failure_writes_failed(self, conductor):
+        """Abra returns failure → task marked failed."""
+        from orchestrator.agents.abra import Abra, AbraResult
+
+        conductor._abra = MagicMock(spec=Abra)
+        conductor._abra.handle = AsyncMock(return_value=AbraResult(
+            success=False,
+            error="Cannot determine room",
+        ))
+        conductor._abra.close = AsyncMock()
+
+        conductor._intent_router.route.return_value = _make_routing(
+            intent=Intent.HOME_AUTOMATION, agent_name="abra",
+            task_text="it's hot",
+        )
+
+        await conductor._process_task("task.md", "it's hot")
+
+        conductor._watcher.write_failed.assert_awaited_once()
+        fail_args = conductor._watcher.write_failed.call_args
+        assert "Cannot determine room" in fail_args[0][1]

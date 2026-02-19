@@ -44,6 +44,14 @@ class OrchestratorConfig(BaseModel):
     vault_sync_couchdb_password: str = ""
     vault_sync_couchdb_conductor_prefix: str = "conductor/"
 
+    # Home Assistant (Abra agent)
+    ha_url: str = ""                    # e.g. "http://homeassistant.local:8123"
+    ha_token: str = ""                  # Long-lived access token
+    ha_sync_entities: bool = True       # Pull entities from HA at startup
+    # Alexa Echo device ID → HA area_id mapping
+    # e.g. {"amzn1.ask.device.XXX": "living_room"}
+    ha_alexa_device_map: dict[str, str] = {}
+
     @classmethod
     def from_yaml(cls, path: str) -> OrchestratorConfig:
         """Load config from a YAML file."""

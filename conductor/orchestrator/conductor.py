@@ -49,6 +49,7 @@ from .training.exemplar_library import ExemplarLibrary, Exemplar
 from .interfaces.obsidian_watcher import ObsidianWatcher
 from .interfaces.vault_sync import create_sync_adapter
 from .agents.intent_router import IntentRouter, Intent
+from .agents.abra import Abra, DeviceRegistry
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -69,6 +70,13 @@ class Conductor:
 
         # Agents
         self._intent_router = IntentRouter(gateway_url=config.gateway_url)
+        self._abra = Abra(
+            registry=DeviceRegistry(
+                alexa_map=config.ha_alexa_device_map or {},
+            ),
+            ha_url=config.ha_url,
+            ha_token=config.ha_token,
+        )
         self._planner = Planner(config.gateway_url)
         self._coder = Coder(config.gateway_url)
         self._reviewer = Reviewer(config.gateway_url, config.accept_threshold)
@@ -123,6 +131,18 @@ class Conductor:
         # Load project context into gateway
         await self._load_project_context()
 
+        # Sync HA entities for Abra (if configured)
+        if self._config.ha_url and self._config.ha_sync_entities:
+            try:
+                count = await self._abra._registry.sync_from_ha(
+                    ha_url=self._config.ha_url,
+                    ha_token=self._config.ha_token,
+                    alexa_map=self._config.ha_alexa_device_map,
+                )
+                console.print(f"  HA entities synced: {count}")
+            except Exception as exc:
+                logger.warning("HA entity sync failed (using defaults): %s", exc)
+
         # Process any pending tasks in inbox (sync + scan)
         pending = await self._watcher.list_pending()
         for filename, content in pending:
@@ -153,6 +173,7 @@ class Conductor:
         self._running = False
         self._watcher.stop()
         await self._intent_router.close()
+        await self._abra.close()
         await self._planner.close()
         await self._coder.close()
         await self._reviewer.close()
@@ -188,10 +209,7 @@ class Conductor:
 
             if routing.intent == Intent.HOME_AUTOMATION:
                 console.print(f"  [bold cyan]Home automation → Abra[/]")
-                # TODO: route to Abra agent when implemented
-                await self._watcher.write_failed(
-                    filename, f"Home automation tasks not yet wired (agent: {routing.agent_name}). Task: {routing.rewritten_task}"
-                )
+                await self._handle_home_automation(filename, routing)
                 return
 
             if routing.intent == Intent.ARTIFACT:
@@ -252,6 +270,55 @@ class Conductor:
             logger.exception("Task %s failed with exception", task_id)
             await self._watcher.write_failed(filename, f"Exception: {exc}")
             console.print(f"  [bold red]Error:[/] {exc}")
+
+    async def _handle_home_automation(self, filename: str, routing) -> None:
+        """Route a home automation intent through Abra.
+
+        Abra resolves the room from the source device, discovers devices,
+        interprets the comfort intent, checks environment, and builds
+        the HA service calls.
+        """
+        task_text = routing.rewritten_task or routing.raw_input
+
+        # Extract source device from metadata if available
+        # (Alexa skill would attach this; for now check raw_input for hints)
+        source_device_id = getattr(routing, "source_device_id", "")
+        area_id = getattr(routing, "area_id", "")
+
+        result = await self._abra.handle(
+            utterance=task_text,
+            source_device_id=source_device_id,
+            area_id=area_id,
+        )
+
+        if not result.success:
+            console.print(f"  [yellow]Abra failed:[/] {result.error}")
+            await self._watcher.write_failed(
+                filename, f"Abra: {result.error}"
+            )
+            return
+
+        console.print(f"  [cyan]Room:[/] {result.room_resolved}")
+        console.print(f"  [cyan]Reasoning:[/] {result.reasoning}")
+        for call in result.service_calls:
+            console.print(
+                f"  [cyan]→[/] {call.domain}.{call.service}({call.entity_id}"
+                + (f", {call.data}" if call.data else "")
+                + ")"
+            )
+
+        # Execute the calls against HA
+        responses = await self._abra.execute(result)
+        console.print(f"  [bold green]Executed {len(responses)} service call(s)[/]")
+
+        # Write completion
+        summary_lines = [
+            f"Room: {result.room_resolved}",
+            f"Reasoning: {result.reasoning}",
+        ]
+        for call in result.service_calls:
+            summary_lines.append(f"  {call.domain}.{call.service}({call.entity_id})")
+        await self._watcher.write_completed(filename, "\n".join(summary_lines))
 
     async def _execute_subtask(
         self,
