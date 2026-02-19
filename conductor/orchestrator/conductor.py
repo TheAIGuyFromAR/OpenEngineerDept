@@ -48,6 +48,7 @@ from .training.data_collector import DataCollector, TrainingRow, CandidateRecord
 from .training.exemplar_library import ExemplarLibrary, Exemplar
 from .interfaces.obsidian_watcher import ObsidianWatcher
 from .interfaces.vault_sync import create_sync_adapter
+from .agents.intent_router import IntentRouter, Intent
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -67,6 +68,7 @@ class Conductor:
         self._knowledge = KnowledgeGraph()
 
         # Agents
+        self._intent_router = IntentRouter(gateway_url=config.gateway_url)
         self._planner = Planner(config.gateway_url)
         self._coder = Coder(config.gateway_url)
         self._reviewer = Reviewer(config.gateway_url, config.accept_threshold)
@@ -150,6 +152,7 @@ class Conductor:
         """Shutdown gracefully."""
         self._running = False
         self._watcher.stop()
+        await self._intent_router.close()
         await self._planner.close()
         await self._coder.close()
         await self._reviewer.close()
@@ -165,13 +168,59 @@ class Conductor:
         console.print(f"\n[bold blue]Processing:[/] {filename} ({task_id})")
 
         try:
+            # Step 0: Intent routing (bouncer)
+            console.print("  [dim]Routing intent...[/]")
+            routing = await self._intent_router.route(task_text)
+
+            if routing.intent == Intent.DENIED:
+                console.print(f"  [bold red]Denied:[/] {routing.denial_reason}")
+                await self._watcher.write_failed(
+                    filename, f"Denied: {routing.denial_reason}"
+                )
+                return
+
+            if routing.intent == Intent.UNCLEAR:
+                console.print(f"  [bold yellow]Unclear intent — asking for clarification[/]")
+                await self._watcher.write_failed(
+                    filename, f"Needs clarification:\n{routing.clarification_prompt}"
+                )
+                return
+
+            if routing.intent == Intent.HOME_AUTOMATION:
+                console.print(f"  [bold cyan]Home automation → Abra[/]")
+                # TODO: route to Abra agent when implemented
+                await self._watcher.write_failed(
+                    filename, f"Home automation tasks not yet wired (agent: {routing.agent_name}). Task: {routing.rewritten_task}"
+                )
+                return
+
+            if routing.intent == Intent.ARTIFACT:
+                console.print(f"  [bold magenta]Artifact creation[/]")
+                # TODO: route to artifact agent when implemented
+                await self._watcher.write_failed(
+                    filename, f"Artifact creation not yet wired (agent: {routing.agent_name}). Task: {routing.rewritten_task}"
+                )
+                return
+
+            if routing.intent == Intent.CONVERSATION:
+                console.print(f"  [bold white]Conversation[/]")
+                # TODO: route to conversation handler
+                await self._watcher.write_failed(
+                    filename, f"Conversation handling not yet wired. Input: {task_text[:200]}"
+                )
+                return
+
+            # CODE or ANALYSIS → existing pipeline
+            console.print(f"  [dim]Intent: {routing.intent.value} → {routing.agent_name} (confidence: {routing.confidence:.0%})[/]")
+            effective_task = routing.rewritten_task or task_text
+
             # Build full context
             context = self._build_context()
 
             # Step 1: Plan
             console.print("  [dim]Planning...[/]")
-            plan = await self._planner.decompose(task_id, task_text, context)
-            self._layer1.start_task(task_text, plan.summary)
+            plan = await self._planner.decompose(task_id, effective_task, context)
+            self._layer1.start_task(effective_task, plan.summary)
 
             for st in plan.subtasks:
                 self._layer1.add_subtask(st.subtask_id, st.description)

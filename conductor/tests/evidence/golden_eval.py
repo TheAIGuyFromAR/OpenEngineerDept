@@ -30,6 +30,8 @@ from pathlib import Path
 import httpx
 
 from .golden import (
+    Annotation,
+    AnnotationPair,
     DecisionScore,
     EvalResult,
     ExpectedSubtask,
@@ -37,6 +39,8 @@ from .golden import (
     GoldenTask,
     Phrasing,
     GOLDEN_TASKS,
+    build_agent_annotation,
+    compute_annotation_agreement,
     sample_prompts,
 )
 
@@ -136,6 +140,7 @@ def bootstrap_from_task(
     files_modified: list[str],
     test_passed: bool,
     context_files: dict[str, str] | None = None,
+    agent_annotation: Annotation | None = None,
     dataset_name: str = "golden-tasks",
 ) -> bool:
     """Add a real orchestrator task execution to the golden dataset.
@@ -143,11 +148,13 @@ def bootstrap_from_task(
     Called by the Conductor after processing a task. Creates a Langfuse
     dataset item from the actual execution, ready for human annotation.
 
-    The human later reviews this in Langfuse UI and adds:
-      - human_rating (1-5 score)
-      - human_notes (what was good/bad)
+    The agent_annotation captures the system's self-assessment of the output.
+    The human later reviews this in Langfuse UI and adds a "user_annotation"
+    score with structured JSON in the comment field:
+      {"rating": 0.8, "rationale": "...", "strengths": [...], "weaknesses": [...],
+       "intent_correct": true, "plan_correct": true, "output_correct": false, "tags": [...]}
 
-    These annotations bootstrap the golden dataset with real-world data.
+    Agreement between agent and user annotations is computed by pull_human_ratings().
     """
     lf = _get_langfuse()
     if lf is None:
@@ -155,6 +162,27 @@ def bootstrap_from_task(
 
     try:
         item_id = f"bootstrap_{task_id}"
+
+        # Build agent annotation from review score if not provided
+        if agent_annotation is None:
+            agent_annotation = Annotation(
+                rating=review_score / 10.0,  # Normalize from 0-10 to 0-1
+                rationale=f"Automated review score: {review_score}/10. Tests {'passed' if test_passed else 'failed'}.",
+                strengths=["tests_passed"] if test_passed else [],
+                weaknesses=[] if test_passed else ["tests_failed"],
+                tags=["bootstrapped"],
+            )
+
+        ann_dict = {
+            "rating": agent_annotation.rating,
+            "rationale": agent_annotation.rationale,
+            "strengths": agent_annotation.strengths,
+            "weaknesses": agent_annotation.weaknesses,
+            "plan_correct": agent_annotation.plan_correct,
+            "output_correct": agent_annotation.output_correct,
+            "tier_correct": agent_annotation.tier_correct,
+            "tags": agent_annotation.tags,
+        }
 
         lf.create_dataset_item(
             dataset_name=dataset_name,
@@ -167,19 +195,19 @@ def bootstrap_from_task(
                 "context_files": context_files or {},
             },
             expected_output={
-                # For bootstrapped items, the "expected" output IS what the system produced
-                # — the human rating determines if it was actually good
                 "plan_raw": plan_raw[:2000],
                 "code_output": code_output[:5000],
                 "review_score": review_score,
                 "files_modified": files_modified,
                 "test_passed": test_passed,
+                "agent_annotation": ann_dict,
             },
             metadata={
                 "source": "bootstrapped",
                 "review_score": review_score,
                 "test_passed": test_passed,
                 "awaiting_human_review": True,
+                "agent_rating": agent_annotation.rating,
             },
         )
         lf.flush()
@@ -267,6 +295,75 @@ def score_output_content(code_output: str, must_contain: list[str], must_not_con
     contain = (hits / len(must_contain)) if must_contain else 1.0
     avoid = 1.0 - (violations / len(must_not_contain)) if must_not_contain else 1.0
     return DecisionScore(checkpoint="output_content", score=round(contain * 0.7 + avoid * 0.3, 3), max_score=1.0, details=f"Contains {hits}/{len(must_contain)}, violations {violations}/{len(must_not_contain)}")
+
+
+def score_intent_routing(
+    actual_intent: str,
+    actual_agent: str,
+    actual_confidence: float,
+    actual_denied: bool,
+    expected: "ExpectedOutcome",
+) -> DecisionScore:
+    """Score the intent router's decision against expected outcome.
+
+    Checks:
+      - Did the router pick the right intent?
+      - Did it route to the right agent?
+      - Should it have denied/clarified?
+      - Is confidence appropriate?
+    """
+    from .golden import ExpectedOutcome  # avoid circular at module level
+
+    points = 0.0
+    max_points = 0.0
+    details_parts = []
+
+    # Intent match
+    if expected.expected_intent:
+        max_points += 1.0
+        if actual_intent == expected.expected_intent:
+            points += 1.0
+            details_parts.append(f"intent={actual_intent} correct")
+        else:
+            details_parts.append(f"intent={actual_intent} expected={expected.expected_intent}")
+
+    # Agent match
+    if expected.expected_agent:
+        max_points += 1.0
+        if actual_agent == expected.expected_agent:
+            points += 1.0
+            details_parts.append(f"agent={actual_agent} correct")
+        else:
+            details_parts.append(f"agent={actual_agent} expected={expected.expected_agent}")
+
+    # Deny check
+    if expected.should_deny:
+        max_points += 1.0
+        if actual_denied:
+            points += 1.0
+            details_parts.append("correctly denied")
+        else:
+            details_parts.append("should have denied but didn't")
+    elif actual_denied:
+        max_points += 1.0
+        details_parts.append("incorrectly denied (false positive)")
+
+    # Clarify check
+    if expected.should_clarify:
+        max_points += 1.0
+        if actual_intent == "unclear":
+            points += 1.0
+            details_parts.append("correctly asked for clarification")
+        else:
+            details_parts.append("should have asked for clarification")
+
+    score = points / max_points if max_points > 0 else 1.0
+    return DecisionScore(
+        checkpoint="intent_routing",
+        score=round(score, 3),
+        max_score=1.0,
+        details="; ".join(details_parts),
+    )
 
 
 # ------------------------------------------------------------------
@@ -404,9 +501,41 @@ async def evaluate_prompt(
 
     result.compute_overall()
 
+    # Build agent self-annotation (store to "memory")
+    agent_ann = build_agent_annotation(
+        overall_score=result.overall_score,
+        scores=result.scores,
+    )
+    result.annotations = AnnotationPair(agent=agent_ann)
+
     if lf_client and trace:
         lf_client.score(trace_id=trace.id, name="overall", value=result.overall_score)
-        trace.update(output={"overall_score": result.overall_score, "passed": result.passed})
+        # Store agent annotation as structured Langfuse score
+        lf_client.score(
+            trace_id=trace.id,
+            name="agent_annotation",
+            value=agent_ann.rating,
+            comment=json.dumps({
+                "rationale": agent_ann.rationale,
+                "strengths": agent_ann.strengths,
+                "weaknesses": agent_ann.weaknesses,
+                "plan_correct": agent_ann.plan_correct,
+                "output_correct": agent_ann.output_correct,
+                "tier_correct": agent_ann.tier_correct,
+                "tags": agent_ann.tags,
+            }),
+        )
+        trace.update(output={
+            "overall_score": result.overall_score,
+            "passed": result.passed,
+            "agent_annotation": {
+                "rating": agent_ann.rating,
+                "rationale": agent_ann.rationale,
+                "strengths": agent_ann.strengths,
+                "weaknesses": agent_ann.weaknesses,
+                "tags": agent_ann.tags,
+            },
+        })
 
     return result
 
@@ -460,15 +589,52 @@ async def collect_golden(
 # ------------------------------------------------------------------
 
 
+def _parse_annotation_comment(comment: str) -> dict:
+    """Parse structured annotation from Langfuse score comment JSON."""
+    if not comment:
+        return {}
+    try:
+        return json.loads(comment)
+    except (json.JSONDecodeError, TypeError):
+        return {"rationale": comment}
+
+
+def _build_annotation_from_langfuse(value: float, comment: str) -> Annotation:
+    """Reconstruct an Annotation from a Langfuse score."""
+    data = _parse_annotation_comment(comment)
+    return Annotation(
+        rating=value,
+        rationale=data.get("rationale", comment or ""),
+        strengths=data.get("strengths", []),
+        weaknesses=data.get("weaknesses", []),
+        intent_correct=data.get("intent_correct"),
+        plan_correct=data.get("plan_correct"),
+        output_correct=data.get("output_correct"),
+        tier_correct=data.get("tier_correct"),
+        tags=data.get("tags", []),
+    )
+
+
 def pull_human_ratings(
     dataset_name: str = "golden-tasks",
     run_name: str = "",
+    embed_fn=None,
 ) -> GoldenEvaluation | None:
     """Pull evaluation + human annotations from Langfuse.
 
     After running collect_golden() or bootstrapping real tasks, humans
-    annotate traces in the Langfuse UI. This pulls those ratings back
-    for analysis and agreement computation.
+    annotate traces in the Langfuse UI. This pulls those ratings back,
+    reconstructs the annotation pairs, and computes agreement scores.
+
+    Langfuse score naming convention:
+      - "agent_annotation": agent self-assessment (auto-generated)
+      - "user_annotation": human assessment (added in Langfuse UI)
+      - "human_rating": legacy numeric rating (1-5)
+      - "overall": automated overall score
+
+    If embed_fn is provided, it's used to compute semantic similarity
+    between agent and user annotation rationales (cosine similarity).
+    Signature: (text: str) -> list[float]
     """
     lf = _get_langfuse()
     if lf is None:
@@ -502,12 +668,25 @@ def pull_human_ratings(
                 phrasing_text=trace.input.get("phrasing", "") if trace.input else "",
             )
 
+            agent_ann = None
+            user_ann = None
+
             try:
                 scores = lf.client.score.get_by_trace(trace.id)
                 for s in scores:
-                    if s.name == "human_rating":
+                    if s.name == "agent_annotation":
+                        agent_ann = _build_annotation_from_langfuse(s.value, s.comment or "")
+                    elif s.name == "user_annotation":
+                        user_ann = _build_annotation_from_langfuse(s.value, s.comment or "")
+                    elif s.name == "human_rating":
                         result.human_rating = s.value
                         result.human_notes = s.comment or ""
+                        # Also build a user annotation from legacy rating
+                        if user_ann is None:
+                            user_ann = Annotation(
+                                rating=s.value / 5.0,
+                                rationale=s.comment or "",
+                            )
                     elif s.name == "overall":
                         result.overall_score = s.value
                     else:
@@ -516,6 +695,16 @@ def pull_human_ratings(
                         ))
             except Exception as exc:
                 logger.debug("Error fetching scores for trace %s: %s", trace.id, exc)
+
+            # Compute annotation agreement if both sides exist
+            if agent_ann and user_ann:
+                result.annotations = compute_annotation_agreement(
+                    agent_ann, user_ann, embed_fn=embed_fn,
+                )
+            elif agent_ann:
+                result.annotations = AnnotationPair(agent=agent_ann)
+            elif user_ann:
+                result.annotations = AnnotationPair(user=user_ann)
 
             result.passed = result.overall_score >= 0.7
             evaluation.results.append(result)
