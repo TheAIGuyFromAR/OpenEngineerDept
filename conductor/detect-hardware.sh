@@ -498,5 +498,13 @@ else
   echo "Next steps:"
   echo "  1. Review the profile:  cat hardware-profile.env"
   echo "  2. Download the model:  ./setup.sh"
-  echo "  3. Launch:              ./launch-conductor.sh"
+  echo "  3. Run deployment tests: ./test-deployment.sh"
+  echo "  4. Launch:              ./launch-conductor.sh"
+  if [[ "$API_RECOMMENDED" == true ]]; then
+    echo ""
+    echo "  Or, to use an API provider instead of local inference:"
+    echo "  1. Edit conductor.yaml (set inference_provider + inference_api_key)"
+    echo "  2. Run deployment tests: ./test-deployment.sh"
+    echo "  3. Launch:              ./launch-conductor.sh"
+  fi
 fi
