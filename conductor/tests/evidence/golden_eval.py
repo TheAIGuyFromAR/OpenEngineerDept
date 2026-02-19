@@ -1,22 +1,23 @@
-"""Golden dataset evaluator — runs the orchestrator pipeline against sampled
-(task, phrasing) pairs and scores decision quality.
+"""Golden dataset evaluator — uses Langfuse for storage, annotation, and
+bootstrapping of orchestrator decision quality data.
 
-Scoring dimensions per prompt:
-  1. Plan decomposition — subtask count, description keyword coverage
-  2. Tier estimation — accuracy vs expected difficulty
-  3. File targeting — did the planner identify the right files?
-  4. Output content — required keywords present, forbidden absent
+Architecture:
+  - Golden tasks + phrasings are stored as a Langfuse Dataset
+  - Each evaluation run creates a Langfuse Dataset Run with traces
+  - Automated scores (plan, tier, files, output) attached to each trace
+  - Human annotations added directly in Langfuse UI on each trace
+  - Every real task processed by the orchestrator ALSO adds to the dataset
+    (bootstrapping) — human reviews those traces to grow the golden set
 
-Process:
-  1. Sample N (task, phrasing) pairs from the matrix
-  2. For each: send phrasing through planner + coder
-  3. Score against the task's expected outcome
-  4. Save results as JSON (includes human_rating fields for calibration)
-  5. Render report showing scores by category AND by phrasing style
+Bootstrapping flow:
+  1. Start with seed golden tasks (3 tasks x 12 phrasings = 36 prompts)
+  2. Run evaluation → automated scores + traces in Langfuse
+  3. Every real orchestrator task automatically creates a dataset item
+  4. Human annotates a sample in Langfuse UI (score 1-5, notes)
+  5. Annotated items become new golden references
+  6. Repeat — dataset grows organically with real usage
 
-The phrasing-style breakdown is the key insight: it reveals whether
-the system handles vague/frustrated/non-technical requests as well as
-specific/technical ones.
+Fallback: If Langfuse is unavailable, runs in local-only mode.
 """
 
 from __future__ import annotations
@@ -42,180 +43,234 @@ from .golden import (
 logger = logging.getLogger(__name__)
 
 
+# ------------------------------------------------------------------
+# Langfuse client
+# ------------------------------------------------------------------
+
+
+def _get_langfuse():
+    """Get Langfuse client, or None if unavailable."""
+    try:
+        from langfuse import Langfuse
+        client = Langfuse()
+        client.auth_check()
+        return client
+    except ImportError:
+        logger.info("Langfuse SDK not installed — using local fallback")
+        return None
+    except Exception as exc:
+        logger.warning("Langfuse not reachable — using local fallback: %s", exc)
+        return None
+
+
+# ------------------------------------------------------------------
+# Dataset management
+# ------------------------------------------------------------------
+
+
+def upload_golden_dataset(
+    tasks: list[GoldenTask] | None = None,
+    dataset_name: str = "golden-tasks",
+) -> bool:
+    """Upload seed golden tasks to Langfuse as a Dataset.
+
+    Each dataset item = one (task, phrasing) pair.
+    Returns True if uploaded, False if Langfuse unavailable.
+    """
+    lf = _get_langfuse()
+    if lf is None:
+        return False
+
+    task_list = tasks or GOLDEN_TASKS
+    lf.create_dataset(name=dataset_name)
+
+    item_count = 0
+    for task in task_list:
+        for phrasing in task.phrasings:
+            item_id = f"{task.id}_{phrasing.style.value}"
+            lf.create_dataset_item(
+                dataset_name=dataset_name,
+                id=item_id,
+                input={
+                    "task_id": task.id,
+                    "task_name": task.name,
+                    "phrasing_style": phrasing.style.value,
+                    "phrasing_text": phrasing.text,
+                    "context_files": task.context_files,
+                },
+                expected_output={
+                    "n_subtasks_min": task.expected.n_subtasks_min,
+                    "n_subtasks_max": task.expected.n_subtasks_max,
+                    "subtasks": [
+                        {
+                            "description_keywords": s.description_keywords,
+                            "expected_tier": s.expected_tier,
+                            "expected_files": s.expected_files,
+                        }
+                        for s in task.expected.subtasks
+                    ],
+                    "output_must_contain": task.expected.output_must_contain,
+                    "output_must_not_contain": task.expected.output_must_not_contain,
+                    "min_review_score": task.expected.min_review_score,
+                },
+                metadata={
+                    "category": task.category.value,
+                    "difficulty": task.difficulty,
+                    "source": "seed",  # vs "bootstrapped" for real tasks
+                },
+            )
+            item_count += 1
+
+    lf.flush()
+    logger.info("Uploaded %d seed items to Langfuse dataset '%s'", item_count, dataset_name)
+    return True
+
+
+def bootstrap_from_task(
+    *,
+    task_id: str,
+    task_text: str,
+    plan_raw: str,
+    code_output: str,
+    review_score: float,
+    files_modified: list[str],
+    test_passed: bool,
+    context_files: dict[str, str] | None = None,
+    dataset_name: str = "golden-tasks",
+) -> bool:
+    """Add a real orchestrator task execution to the golden dataset.
+
+    Called by the Conductor after processing a task. Creates a Langfuse
+    dataset item from the actual execution, ready for human annotation.
+
+    The human later reviews this in Langfuse UI and adds:
+      - human_rating (1-5 score)
+      - human_notes (what was good/bad)
+
+    These annotations bootstrap the golden dataset with real-world data.
+    """
+    lf = _get_langfuse()
+    if lf is None:
+        return False
+
+    try:
+        item_id = f"bootstrap_{task_id}"
+
+        lf.create_dataset_item(
+            dataset_name=dataset_name,
+            id=item_id,
+            input={
+                "task_id": task_id,
+                "task_name": task_text[:80],
+                "phrasing_style": "real_task",
+                "phrasing_text": task_text,
+                "context_files": context_files or {},
+            },
+            expected_output={
+                # For bootstrapped items, the "expected" output IS what the system produced
+                # — the human rating determines if it was actually good
+                "plan_raw": plan_raw[:2000],
+                "code_output": code_output[:5000],
+                "review_score": review_score,
+                "files_modified": files_modified,
+                "test_passed": test_passed,
+            },
+            metadata={
+                "source": "bootstrapped",
+                "review_score": review_score,
+                "test_passed": test_passed,
+                "awaiting_human_review": True,
+            },
+        )
+        lf.flush()
+        return True
+    except Exception as exc:
+        logger.debug("Bootstrap to Langfuse failed: %s", exc)
+        return False
+
+
+# ------------------------------------------------------------------
+# Scoring functions
+# ------------------------------------------------------------------
+
+
 async def _chat(
     client: httpx.AsyncClient,
     messages: list[dict],
     max_tokens: int = 2048,
     temperature: float = 0.7,
 ) -> str:
-    """Send chat completion, return content string."""
     resp = await client.post(
         "/v1/chat/completions",
-        json={
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        },
+        json={"messages": messages, "max_tokens": max_tokens, "temperature": temperature},
     )
     resp.raise_for_status()
     data = resp.json()
     return data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
 
-# ------------------------------------------------------------------
-# Individual scoring functions
-# ------------------------------------------------------------------
-
-
 def score_plan_decomposition(
-    actual_subtasks: list[dict],
-    expected: list[ExpectedSubtask],
-    n_min: int,
-    n_max: int,
+    actual_subtasks: list[dict], expected: list[ExpectedSubtask], n_min: int, n_max: int,
 ) -> DecisionScore:
-    """Score: did the planner produce the right number and kind of subtasks?"""
     n = len(actual_subtasks)
-
-    # Count check
     if n < n_min:
-        count_score = 0.0
-        detail = f"Too few subtasks: {n} < {n_min}"
+        count_score, detail = 0.0, f"Too few subtasks: {n} < {n_min}"
     elif n > n_max:
-        count_score = max(0.0, 1.0 - (n - n_max) * 0.2)
-        detail = f"Too many subtasks: {n} > {n_max}"
+        count_score, detail = max(0.0, 1.0 - (n - n_max) * 0.2), f"Too many subtasks: {n} > {n_max}"
     else:
-        count_score = 1.0
-        detail = f"Subtask count {n} in range [{n_min}, {n_max}]"
+        count_score, detail = 1.0, f"Subtask count {n} in [{n_min}, {n_max}]"
 
-    # Keyword coverage: do actual subtask descriptions mention expected keywords?
-    keyword_hits = 0
-    keyword_total = 0
+    keyword_hits = keyword_total = 0
     for exp in expected:
         for kw in exp.description_keywords:
             keyword_total += 1
-            for actual in actual_subtasks:
-                desc = actual.get("description", "").lower()
-                if kw.lower() in desc:
-                    keyword_hits += 1
-                    break
-
+            if any(kw.lower() in a.get("description", "").lower() for a in actual_subtasks):
+                keyword_hits += 1
     keyword_score = (keyword_hits / keyword_total) if keyword_total > 0 else 1.0
-    combined = count_score * 0.4 + keyword_score * 0.6
 
     return DecisionScore(
-        checkpoint="plan_decomposition",
-        score=round(combined, 3),
-        max_score=1.0,
-        details=f"{detail}; keywords {keyword_hits}/{keyword_total}",
+        checkpoint="plan_decomposition", score=round(count_score * 0.4 + keyword_score * 0.6, 3),
+        max_score=1.0, details=f"{detail}; keywords {keyword_hits}/{keyword_total}",
     )
 
 
-def score_tier_estimates(
-    actual_subtasks: list[dict],
-    expected: list[ExpectedSubtask],
-) -> DecisionScore:
-    """Score: were tier estimates accurate?"""
+def score_tier_estimates(actual_subtasks: list[dict], expected: list[ExpectedSubtask]) -> DecisionScore:
     if not expected or not actual_subtasks:
-        return DecisionScore(
-            checkpoint="tier_estimation",
-            score=0.5,
-            max_score=1.0,
-            details="No subtasks to compare",
-        )
-
-    correct = 0
-    close = 0
+        return DecisionScore(checkpoint="tier_estimation", score=0.5, max_score=1.0, details="No subtasks to compare")
+    correct = close = 0
     total = min(len(actual_subtasks), len(expected))
-
     for i in range(total):
-        actual_tier = actual_subtasks[i].get("tier", 2)
-        exp = expected[i]
-        diff = abs(actual_tier - exp.expected_tier)
-        if diff == 0:
-            correct += 1
-        elif diff <= exp.tier_tolerance:
-            close += 1
-
-    score = (correct * 1.0 + close * 0.5) / total if total > 0 else 0
-
-    return DecisionScore(
-        checkpoint="tier_estimation",
-        score=round(score, 3),
-        max_score=1.0,
-        details=f"Exact: {correct}/{total}, within tolerance: {close}/{total}",
-    )
+        diff = abs(actual_subtasks[i].get("tier", 2) - expected[i].expected_tier)
+        if diff == 0: correct += 1
+        elif diff <= expected[i].tier_tolerance: close += 1
+    score = (correct + close * 0.5) / total if total > 0 else 0
+    return DecisionScore(checkpoint="tier_estimation", score=round(score, 3), max_score=1.0, details=f"Exact: {correct}/{total}, close: {close}/{total}")
 
 
-def score_file_targeting(
-    actual_subtasks: list[dict],
-    expected: list[ExpectedSubtask],
-) -> DecisionScore:
-    """Score: did the planner identify the right files?"""
-    if not expected:
-        return DecisionScore(
-            checkpoint="file_targeting", score=1.0, max_score=1.0,
-            details="No file expectations",
-        )
-
-    expected_files = set()
-    for exp in expected:
-        expected_files.update(exp.expected_files)
-
+def score_file_targeting(actual_subtasks: list[dict], expected: list[ExpectedSubtask]) -> DecisionScore:
+    expected_files = {f for exp in expected for f in exp.expected_files}
     if not expected_files:
-        return DecisionScore(
-            checkpoint="file_targeting", score=1.0, max_score=1.0,
-            details="No specific files expected",
-        )
-
-    actual_files = set()
-    for st in actual_subtasks:
-        actual_files.update(st.get("files_likely", []))
-
+        return DecisionScore(checkpoint="file_targeting", score=1.0, max_score=1.0, details="No specific files expected")
+    actual_files = {f for st in actual_subtasks for f in st.get("files_likely", [])}
     if not actual_files:
-        return DecisionScore(
-            checkpoint="file_targeting", score=0.0, max_score=1.0,
-            details=f"No files predicted (expected {expected_files})",
-        )
-
+        return DecisionScore(checkpoint="file_targeting", score=0.0, max_score=1.0, details=f"No files predicted")
     hits = expected_files & actual_files
-    precision = len(hits) / len(actual_files)
-    recall = len(hits) / len(expected_files)
-    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0
-
-    return DecisionScore(
-        checkpoint="file_targeting",
-        score=round(f1, 3),
-        max_score=1.0,
-        details=f"F1={f1:.2f} (precision={precision:.2f}, recall={recall:.2f})",
-    )
+    p, r = len(hits) / len(actual_files), len(hits) / len(expected_files)
+    f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0
+    return DecisionScore(checkpoint="file_targeting", score=round(f1, 3), max_score=1.0, details=f"F1={f1:.2f}")
 
 
-def score_output_content(
-    code_output: str,
-    must_contain: list[str],
-    must_not_contain: list[str],
-) -> DecisionScore:
-    """Score: does the generated code contain required keywords?"""
-    lower_output = code_output.lower()
-
-    hits = sum(1 for kw in must_contain if kw.lower() in lower_output)
-    contain_score = (hits / len(must_contain)) if must_contain else 1.0
-
-    violations = sum(1 for kw in must_not_contain if kw.lower() in lower_output)
-    avoid_score = 1.0 - (violations / len(must_not_contain)) if must_not_contain else 1.0
-
-    combined = contain_score * 0.7 + avoid_score * 0.3
-
-    return DecisionScore(
-        checkpoint="output_content",
-        score=round(combined, 3),
-        max_score=1.0,
-        details=f"Contains {hits}/{len(must_contain)}, violations {violations}/{len(must_not_contain)}",
-    )
+def score_output_content(code_output: str, must_contain: list[str], must_not_contain: list[str]) -> DecisionScore:
+    lower = code_output.lower()
+    hits = sum(1 for kw in must_contain if kw.lower() in lower)
+    violations = sum(1 for kw in must_not_contain if kw.lower() in lower)
+    contain = (hits / len(must_contain)) if must_contain else 1.0
+    avoid = 1.0 - (violations / len(must_not_contain)) if must_not_contain else 1.0
+    return DecisionScore(checkpoint="output_content", score=round(contain * 0.7 + avoid * 0.3, 3), max_score=1.0, details=f"Contains {hits}/{len(must_contain)}, violations {violations}/{len(must_not_contain)}")
 
 
 # ------------------------------------------------------------------
-# Prompts (match orchestrator agent prompts exactly)
+# Prompts
 # ------------------------------------------------------------------
 
 _PLANNER_PROMPT = """\
@@ -236,12 +291,7 @@ Respond in this exact JSON format:
 {
   "summary": "brief plan summary",
   "subtasks": [
-    {
-      "description": "what to do",
-      "tier": 2,
-      "files_likely": ["path/to/file.py"],
-      "dependencies": []
-    }
+    {"description": "what to do", "tier": 2, "files_likely": ["path/file.py"], "dependencies": []}
   ]
 }
 """
@@ -252,15 +302,13 @@ context, produce a complete implementation.
 
 Rules:
 - Output ONLY the code changes needed
-- For new files, output the complete file content with a header: `=== NEW FILE: path/to/file.py ===`
+- For new files: `=== NEW FILE: path/to/file.py ===` header
 - Include minimal, necessary comments
-- Follow the project's existing patterns and conventions
-- Do not include explanations outside of code comments
+- Follow existing patterns and conventions
 """
 
 
 def _parse_plan_json(raw: str) -> dict:
-    """Extract plan JSON from LLM response (handles markdown fences)."""
     cleaned = raw.strip()
     if "```json" in cleaned:
         cleaned = cleaned.split("```json")[1].split("```")[0]
@@ -273,7 +321,7 @@ def _parse_plan_json(raw: str) -> dict:
 
 
 # ------------------------------------------------------------------
-# Single prompt evaluation
+# Evaluation
 # ------------------------------------------------------------------
 
 
@@ -281,86 +329,90 @@ async def evaluate_prompt(
     client: httpx.AsyncClient,
     task: GoldenTask,
     phrasing: Phrasing,
+    *,
+    lf_client=None,
+    run_name: str = "",
+    dataset_name: str = "golden-tasks",
 ) -> EvalResult:
-    """Evaluate one (task, phrasing) pair against the live gateway."""
+    """Evaluate one (task, phrasing) pair. Traces to Langfuse if available."""
     result = EvalResult(
-        task_id=task.id,
-        task_name=task.name,
-        category=task.category.value,
-        phrasing_style=phrasing.style.value,
-        phrasing_text=phrasing.text,
+        task_id=task.id, task_name=task.name, category=task.category.value,
+        phrasing_style=phrasing.style.value, phrasing_text=phrasing.text,
     )
 
+    trace = None
+    if lf_client:
+        trace = lf_client.trace(
+            name=f"golden-eval-{task.id}-{phrasing.style.value}",
+            metadata={
+                "task_id": task.id, "task_name": task.name,
+                "category": task.category.value, "difficulty": task.difficulty,
+                "phrasing_style": phrasing.style.value, "run_name": run_name,
+            },
+            input={"phrasing": phrasing.text, "context_files": list(task.context_files.keys())},
+        )
+
     try:
-        # Build context from the task's reference files
-        context_parts = []
-        for path, content in task.context_files.items():
-            context_parts.append(f"=== {path} ===\n{content}")
+        context_parts = [f"=== {p} ===\n{c}" for p, c in task.context_files.items()]
         context = "\n\n".join(context_parts) if context_parts else ""
 
-        # ── Step 1: Run the planner with THIS phrasing ───────────
-        plan_messages = []
+        # Planner
+        plan_msgs = []
         if context:
-            plan_messages.append({"role": "system", "content": f"Project files:\n{context}"})
-        plan_messages.append({"role": "system", "content": _PLANNER_PROMPT})
-        plan_messages.append({"role": "user", "content": phrasing.text})
+            plan_msgs.append({"role": "system", "content": f"Project files:\n{context}"})
+        plan_msgs.append({"role": "system", "content": _PLANNER_PROMPT})
+        plan_msgs.append({"role": "user", "content": phrasing.text})
 
-        plan_raw = await _chat(client, plan_messages, max_tokens=2048, temperature=0.7)
+        plan_raw = await _chat(client, plan_msgs, max_tokens=2048, temperature=0.7)
         plan_data = _parse_plan_json(plan_raw)
         actual_subtasks = plan_data.get("subtasks", [])
 
-        # Score plan
-        result.scores.append(
-            score_plan_decomposition(
-                actual_subtasks,
-                task.expected.subtasks,
-                task.expected.n_subtasks_min,
-                task.expected.n_subtasks_max,
-            )
-        )
+        if trace:
+            trace.generation(name="planner", input=plan_msgs, output=plan_raw,
+                             metadata={"subtask_count": len(actual_subtasks)})
 
-        # Score tiers
-        result.scores.append(
-            score_tier_estimates(actual_subtasks, task.expected.subtasks)
-        )
+        result.scores.append(score_plan_decomposition(actual_subtasks, task.expected.subtasks, task.expected.n_subtasks_min, task.expected.n_subtasks_max))
+        result.scores.append(score_tier_estimates(actual_subtasks, task.expected.subtasks))
+        result.scores.append(score_file_targeting(actual_subtasks, task.expected.subtasks))
 
-        # Score file targeting
-        result.scores.append(
-            score_file_targeting(actual_subtasks, task.expected.subtasks)
-        )
-
-        # ── Step 2: Run the coder on first subtask ───────────────
-        first_subtask = (
-            actual_subtasks[0].get("description", phrasing.text)
-            if actual_subtasks else phrasing.text
-        )
-
-        code_messages = [
+        # Coder
+        first = actual_subtasks[0].get("description", phrasing.text) if actual_subtasks else phrasing.text
+        code_msgs = [
             {"role": "system", "content": f"{context}\n\n{_CODER_PROMPT}" if context else _CODER_PROMPT},
-            {"role": "user", "content": f"## Subtask\n{first_subtask}"},
+            {"role": "user", "content": f"## Subtask\n{first}"},
         ]
+        code_output = await _chat(client, code_msgs, max_tokens=2048, temperature=0.3)
 
-        code_output = await _chat(client, code_messages, max_tokens=2048, temperature=0.3)
+        if trace:
+            trace.generation(name="coder", input=code_msgs, output=code_output)
 
-        # Score output
-        result.scores.append(
-            score_output_content(
-                code_output,
-                task.expected.output_must_contain,
-                task.expected.output_must_not_contain,
-            )
-        )
+        result.scores.append(score_output_content(code_output, task.expected.output_must_contain, task.expected.output_must_not_contain))
+
+        # Attach scores to Langfuse
+        if lf_client and trace:
+            for s in result.scores:
+                lf_client.score(trace_id=trace.id, name=s.checkpoint, value=s.score, comment=s.details)
+            try:
+                item_id = f"{task.id}_{phrasing.style.value}"
+                trace.link_dataset_item(dataset_name=dataset_name, dataset_item_id=item_id, run_name=run_name)
+            except Exception as exc:
+                logger.debug("Could not link dataset item: %s", exc)
 
     except Exception as exc:
         result.error = str(exc)[:200]
         logger.error("Golden eval %s/%s failed: %s", task.id, phrasing.style.value, exc)
 
     result.compute_overall()
+
+    if lf_client and trace:
+        lf_client.score(trace_id=trace.id, name="overall", value=result.overall_score)
+        trace.update(output={"overall_score": result.overall_score, "passed": result.passed})
+
     return result
 
 
 # ------------------------------------------------------------------
-# Main collection function
+# Main collector
 # ------------------------------------------------------------------
 
 
@@ -369,76 +421,108 @@ async def collect_golden(
     n_samples: int = 0,
     seed: int = 42,
     tasks: list[GoldenTask] | None = None,
+    dataset_name: str = "golden-tasks",
 ) -> GoldenEvaluation:
-    """Run golden evaluation on sampled (task, phrasing) pairs.
+    """Run golden evaluation. Traces to Langfuse; human annotates in Langfuse UI.
 
-    Args:
-        client: httpx client pointed at the gateway
-        n_samples: Number of pairs to sample (0 = all pairs)
-        seed: Random seed for reproducible sampling
-        tasks: Override task list (default: GOLDEN_TASKS)
+    Every real task also bootstraps the dataset via bootstrap_from_task().
     """
+    lf = _get_langfuse()
     task_list = tasks or GOLDEN_TASKS
     evaluation = GoldenEvaluation()
+    run_name = f"golden-eval-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
-    if n_samples > 0:
-        pairs = sample_prompts(task_list, n=n_samples, seed=seed)
+    if lf:
+        print(f"  Langfuse connected — run: '{run_name}'")
+        print(f"  Annotate: Langfuse UI → Datasets → {dataset_name} → {run_name}")
+        upload_golden_dataset(task_list, dataset_name=dataset_name)
     else:
-        pairs = [(t, p) for t in task_list for p in t.phrasings]
+        print("  Langfuse unavailable — local-only mode")
+
+    pairs = sample_prompts(task_list, n=n_samples, seed=seed) if n_samples > 0 else [(t, p) for t in task_list for p in t.phrasings]
 
     for task, phrasing in pairs:
         print(f"    [{task.id}] {phrasing.style.value:15s} ...", end="", flush=True)
-        result = await evaluate_prompt(client, task, phrasing)
+        result = await evaluate_prompt(client, task, phrasing, lf_client=lf, run_name=run_name, dataset_name=dataset_name)
         evaluation.results.append(result)
         icon = "PASS" if result.passed else "FAIL"
         print(f" [{icon}] {result.overall_score:.1%}")
+
+    if lf:
+        lf.flush()
 
     evaluation.compute_summary()
     return evaluation
 
 
 # ------------------------------------------------------------------
-# Human rating file I/O
+# Pull human ratings back from Langfuse
 # ------------------------------------------------------------------
 
 
-def save_for_rating(evaluation: GoldenEvaluation, path: str | Path) -> None:
-    """Save evaluation results as JSON for human rating.
+def pull_human_ratings(
+    dataset_name: str = "golden-tasks",
+    run_name: str = "",
+) -> GoldenEvaluation | None:
+    """Pull evaluation + human annotations from Langfuse.
 
-    The output file contains all results with empty human_rating fields.
-    A human can fill in ratings (1-5) and notes, then load them back.
+    After running collect_golden() or bootstrapping real tasks, humans
+    annotate traces in the Langfuse UI. This pulls those ratings back
+    for analysis and agreement computation.
     """
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(evaluation.to_json())
-    print(f"Saved {len(evaluation.results)} results to {p}")
-    print(f"Edit the 'human_rating' (1-5) and 'human_notes' fields, then reload.")
-
-
-def load_with_ratings(path: str | Path) -> GoldenEvaluation:
-    """Load evaluation results that may include human ratings."""
-    from dataclasses import fields
-
-    p = Path(path)
-    data = json.loads(p.read_text())
+    lf = _get_langfuse()
+    if lf is None:
+        return None
 
     evaluation = GoldenEvaluation()
-    for r_data in data.get("results", []):
-        result = EvalResult(
-            task_id=r_data["task_id"],
-            task_name=r_data["task_name"],
-            category=r_data["category"],
-            phrasing_style=r_data["phrasing_style"],
-            phrasing_text=r_data["phrasing_text"],
-            overall_score=r_data.get("overall_score", 0.0),
-            passed=r_data.get("passed", False),
-            error=r_data.get("error", ""),
-            human_rating=r_data.get("human_rating"),
-            human_notes=r_data.get("human_notes", ""),
-        )
-        for s_data in r_data.get("scores", []):
-            result.scores.append(DecisionScore(**s_data))
-        evaluation.results.append(result)
+
+    try:
+        dataset = lf.get_dataset(name=dataset_name)
+        if not dataset:
+            return None
+
+        runs = dataset.runs
+        if run_name:
+            runs = [r for r in runs if r.name == run_name]
+        if not runs:
+            return None
+
+        run = runs[-1]
+        for item_run in run.dataset_run_items:
+            trace = item_run.trace
+            if not trace:
+                continue
+
+            metadata = trace.metadata or {}
+            result = EvalResult(
+                task_id=metadata.get("task_id", ""),
+                task_name=metadata.get("task_name", ""),
+                category=metadata.get("category", ""),
+                phrasing_style=metadata.get("phrasing_style", ""),
+                phrasing_text=trace.input.get("phrasing", "") if trace.input else "",
+            )
+
+            try:
+                scores = lf.client.score.get_by_trace(trace.id)
+                for s in scores:
+                    if s.name == "human_rating":
+                        result.human_rating = s.value
+                        result.human_notes = s.comment or ""
+                    elif s.name == "overall":
+                        result.overall_score = s.value
+                    else:
+                        result.scores.append(DecisionScore(
+                            checkpoint=s.name, score=s.value, max_score=1.0, details=s.comment or "",
+                        ))
+            except Exception as exc:
+                logger.debug("Error fetching scores for trace %s: %s", trace.id, exc)
+
+            result.passed = result.overall_score >= 0.7
+            evaluation.results.append(result)
+
+    except Exception as exc:
+        logger.error("Error pulling from Langfuse: %s", exc)
+        return None
 
     evaluation.compute_summary()
     return evaluation
